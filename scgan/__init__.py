@@ -1,0 +1,1 @@
+# Set global variables
