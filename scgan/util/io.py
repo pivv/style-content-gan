@@ -1,7 +1,7 @@
 import sys
 import os
 
-from typing import List, Callable, Union, Any, TypeVar, Tuple
+from typing import List, Callable, Union, Any, TypeVar, Tuple, Dict
 from torch import Tensor
 
 import numpy as np
@@ -29,33 +29,6 @@ def read_image(file_path: str, unchanged: bool = False) -> np.ndarray:
 
 def write_image(image: np.ndarray, file_path: str) -> None:
     cv2.imwrite(file_path, image)
-
-
-def read_sha_icon(icon_dir: str) -> np.ndarray:
-    file_path = os.path.join(icon_dir, f'sha2.png')
-    icon_image = read_image(file_path, unchanged=True)
-    icon_image = cv2.resize(icon_image, SHA_SIZE)
-    return icon_image
-
-
-def read_item_icons(icon_dir: str) -> List[np.ndarray]:
-    item_icons = [None]  # No image for no_item
-    for item in ITEMS[1:]:
-        file_path = os.path.join(icon_dir, f'{item}.png')
-        icon_image = read_image(file_path, unchanged=True)
-        icon_image = cv2.resize(icon_image, ICON_SIZE)
-        item_icons.append(icon_image)
-    return item_icons
-
-
-def read_rank_icons(icon_dir: str) -> List[np.ndarray]:
-    rank_icons = [None]  # No image for rank 0
-    for rank in range(1, 1+NUM_RANK):
-        file_path = os.path.join(icon_dir, f'{rank}.png')
-        icon_image = read_image(file_path, unchanged=True)
-        icon_image = cv2.resize(icon_image, ICON_SIZE)
-        rank_icons.append(icon_image)
-    return rank_icons
 
 
 def imscatter(x, y, image, ax=None, zoom=1):
@@ -138,102 +111,6 @@ def read_videos(file_paths: List[str] or str, dframe: int = 1) -> List[dict]:
         data = read_video(file_path, dframe=dframe, visualize=False)
         all_data.append(data)
     return all_data
-
-
-def read_data(file_paths: List[str] or str, frame_type: str = '',
-              rect: Tuple[int, int, int, int] = None,
-              margin: Tuple[float, float, float, float] = None,
-              load_params: bool = False) -> dict:
-    if isinstance(file_paths, str):  # Directory is given.
-        file_paths = sorted(list(set([os.path.join(file_paths, os.path.splitext(file_name)[0]) for
-                                      file_name in os.listdir(file_paths)])))
-    if frame_type:
-        frames_column = f'{frame_type}_frames'
-        frame_names_column = f'{frame_type}_frame_names'
-        margin_column = f'{frame_type}_margins'
-    else:
-        frames_column = 'frames'
-        frame_names_column = 'frame_names'
-        margin_column = ''
-
-    images = []
-    rects = []
-    margins = []
-    for file_path in file_paths:
-        images.append(read_image(f'{file_path}.png'))
-        if rect is not None:
-            assert(not load_params)
-            rects.append(rect)
-        if margin is not None:
-            assert(not load_params)
-            margins.append(margin)
-        if load_params:
-            yaml_data = read_yaml(f'{file_path}.yaml')
-            if 'rect' in yaml_data:
-                rects.append(yaml_data['rect'])
-            if 'margin' in yaml_data:
-                margins.append(yaml_data['margin'])
-
-    file_names = [os.path.basename(file_path) for file_path in file_paths]
-    if frame_type in ['team', 'item']:
-        images = [[image] for image in images]
-        file_names = [[file_name] for file_name in file_names]
-    data = {frames_column: images, frame_names_column: file_names}
-    if rects:
-        data['base_rects'] = rects
-    if margins:
-        data[margin_column] = margins
-    return data
-
-
-def write_data(data: dict, save_dir: str, frame_type: str = '', save_params: bool = False,
-               save_frames: np.ndarray = None) -> None:
-    if frame_type:
-        frames_column = f'{frame_type}_frames'
-        frame_names_column = f'{frame_type}_frame_names'
-        margin_column = f'{frame_type}_margins'
-    else:
-        frames_column = 'frames'
-        frame_names_column = 'frame_names'
-        margin_column = ''
-    assert(frames_column in data and frame_names_column in data)
-    frames: List[np.ndarray] or List[List[np.ndarray]] = data[frames_column]
-    frame_names: List[np.ndarray] or List[List[np.ndarray]] = data[frame_names_column]
-    os.makedirs(os.path.join(save_dir), exist_ok=True)
-    for iframe, (frame, frame_name) in enumerate(zip(frames, frame_names)):
-        if isinstance(frame, list):
-            sub_frames, sub_frame_names = frame, frame_name
-            sub_save_frames = save_frames[iframe] if save_frames is not None else None
-        else:
-            sub_frames, sub_frame_names = [frame], [frame_name]
-            sub_save_frames = [save_frames[iframe]] if save_frames is not None else None
-        for isub, (frame, frame_name) in enumerate(zip(sub_frames, sub_frame_names)):
-            if sub_save_frames is not None and not sub_save_frames[isub]:
-                continue
-            write_image(frame, os.path.join(save_dir, f'{frame_name}.png'))
-            if save_params:
-                yaml_data = dict()
-                if not frame_type and 'basic_rects' in data:
-                    yaml_data['rect']: Tuple[int, int, int, int] = data['basic_rects'][iframe]
-                if margin_column and margin_column in data:
-                    yaml_data['margin']: Tuple[float, float, float, float] = data[margin_column][iframe]
-                write_yaml(yaml_data, os.path.join(save_dir, f'{frame_name}.yaml'))
-
-
-def slice_data(data: dict, indices: np.ndarray or List[int], inplace=False) -> dict:
-    if inplace:
-        sliced_data = data
-    else:
-        sliced_data = dict()
-    for key in data:
-        if isinstance(data[key], np.ndarray):
-            sliced_data[key] = data[key][indices]
-        elif isinstance(data[key], list):
-            sliced_data[key] = [data[key][index] for index in indices]
-        else:
-            assert(key in ['name', 'fps'])
-            sliced_data[key] = data[key]
-    return sliced_data
 
 
 def apply_margin(rect: Tuple[int, int, int, int],
