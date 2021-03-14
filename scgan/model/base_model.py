@@ -35,8 +35,8 @@ class BaseModel(nn.Module):
                        global_step: int = 0) -> Dict[str, Any]:
         self.train()
 
-        output: Dict[str, Tensor] = self.forward(batch, global_step=global_step)
-        loss_dict: Dict[str, Tensor] = self.loss_function(batch, output, global_step=global_step)
+        output: Dict[str, Tensor] = self.forward(batch, params, global_step=global_step)
+        loss_dict: Dict[str, Tensor] = self.loss_function(batch, output, params, global_step=global_step)
 
         self._update_optimizers(loss_dict, params, global_step=global_step)
         for optimizer, loss_str in self._optimizers:
@@ -50,22 +50,25 @@ class BaseModel(nn.Module):
         loss_dict: Dict[str, Any] = {key: value.item() for key, value in loss_dict.items()}
         return loss_dict
 
-    def evaluate(self, data: DataLoader, global_step: int = 0) -> Dict[str, Any]:
-        loss_sum, correct_sum, total_count = 0., 0, 0
+    def _batch_wrapper(self, fn, data: DataLoader, params: Dict[str, Any] = None,
+                       global_step: int = 0) -> Tuple[Dict[str, Tensor], Dict[str, Tensor]]:
         batches: Dict[str, List[Tensor]] = defaultdict(list)
         outputs: Dict[str, List[Tensor]] = defaultdict(list)
         for batch in data:
             batch: Dict[str, Tensor] = {key: value.to(self._device) for key, value in batch.items()}
             with torch.no_grad():
-                output: Dict[str, Tensor] = self.forward(batch, global_step=global_step)
+                output: Dict[str, Tensor] = fn(batch, params=params, global_step=global_step)
             for key in batch.keys():
                 batches[key].append(batch[key].detach().cpu().numpy())
             for key in output.keys():
                 outputs[key].append(output[key].detach().cpu().numpy())
         all_batch: Dict[str, Tensor] = {key: torch.cat(value, dim=0) for key, value in batches.items()}
         all_output: Dict[str, Tensor] = {key: torch.cat(value, dim=0) for key, value in outputs.items()}
-        loss_dict: Dict[str, Tensor] = self.loss_function(all_batch, all_output, global_step=global_step)
+        return all_batch, all_output
 
+    def evaluate(self, data: DataLoader, params: Dict[str, Any], global_step: int = 0) -> Dict[str, Any]:
+        all_batch, all_output = self._batch_wrapper(self.forward, data, params, global_step=global_step)
+        loss_dict: Dict[str, Tensor] = self.loss_function(all_batch, all_output, params, global_step=global_step)
         loss_dict: Dict[str, Any] = {key: value.item() for key, value in loss_dict.items()}
         return loss_dict
 
@@ -81,7 +84,7 @@ class BaseModel(nn.Module):
         os.makedirs(log_dir, exist_ok=True)
         writer = SummaryWriter(log_dir)
 
-        self.set_optimizers(params)
+        self._set_optimizers(params)
 
         start_time = time.time()
         istep, best_istep, best_val_loss = 0, -1, None
@@ -90,15 +93,16 @@ class BaseModel(nn.Module):
         val_loss_dict: dict = None
         for iepoch in range(1, num_epoch+1):
             for batch in train_data:
+                istep += 1
+                self._update_schedulers(params, global_step=istep)
                 batch: Dict[str, Tensor] = {key: value.to(self._device) for key, value in batch.items()}
                 loss_dict: Dict[str, Any] = self.train_on_batch(batch, params, global_step=istep)
-                istep += 1
                 for key in loss_dict:
                     writer.add_scalar(f'train/{key}', loss_dict[key], global_step=istep)
                 if istep % params['checkpoint_interval'] == 0:
                     torch.save(self.state_dict(), os.path.join(checkpoint_dir, f'model_{istep}.pth.tar'))
                 if val_data is not None and istep % params['validation_interval'] == 0:
-                    val_loss_dict: Dict[str, Any] = self.evaluate(val_data, global_step=istep)
+                    val_loss_dict: Dict[str, Any] = self.evaluate(val_data, params, global_step=istep)
                     for key in val_loss_dict:
                         writer.add_scalar(f'val/{key}', val_loss_dict[key], global_step=istep)
                     stopping_loss_str: str = params['stopping_loss'] if 'stopping_loss' in params else ''
@@ -113,8 +117,6 @@ class BaseModel(nn.Module):
                         print("    [VAL] " + ". ".join(f"[{key.upper()}] {value:.6f}" for key, value in
                                                        val_loss_dict.items()))
                     print(f'    Best Step: {best_istep:6d}. Elapsed Time: {time.time()-start_time:3f} seconds.')
-            for scheduler in self._schedulers:
-                scheduler.step()
             torch.cuda.empty_cache()
         self.load(os.path.join(run_dir, 'best_model.pth.tar'))
 
@@ -131,19 +133,36 @@ class BaseModel(nn.Module):
                     clip_grad_norm_(self.parameters(), params['clip_size'])
                 optimizer.step()
 
+    def _update_schedulers(self, params: Dict[str, Any], global_step: int = 0) -> None:
+        for scheduler in self._schedulers:
+            scheduler.step()
+
     @abstractmethod
-    def set_optimizers(self, params: Dict[str, Any]) -> None:
+    def _set_optimizers(self, params: Dict[str, Any]) -> None:
+        pass
+
+    def predict(self, data: DataLoader) -> Dict[str, Tensor]:
+        _, output = self._batch_wrapper(self._predict, data)
+        return output
+
+    def predict_one(self, input: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+        batch: Dict[str, Tensor] = {key: torch.FloatTensor(value).unsqueeze(0).to(self._device) for
+                                    key, value in input.items()}
+        output: Dict[str, Tensor] = self._predict(batch)
+        output: Dict[str, np.ndarray] = {key: value.squeeze(0).detach().cpu().numpy() for
+                                         key, value in output.items()}
+        return output
+
+    @abstractmethod
+    def _predict(self, batch: Dict[str, Tensor], **kwargs) -> Dict[str, Tensor]:
         pass
 
     @abstractmethod
-    def predict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def forward(self, batch: Dict[str, Tensor], params: Dict[str, Any],
+                global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
         pass
 
     @abstractmethod
-    def forward(self, batch: Dict[str, Tensor], global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
-        pass
-
-    @abstractmethod
-    def loss_function(self, batch: Dict[str, Tensor], output: Dict[str, Tensor], global_step: int = 0,
-                      **kwargs) -> Dict[str, Tensor]:
+    def loss_function(self, batch: Dict[str, Tensor], output: Dict[str, Tensor], params: Dict[str, Any],
+                      global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
         pass

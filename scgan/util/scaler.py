@@ -15,8 +15,8 @@ class Scaler(object):
         self.scale: float = scale
         self.bias: float = bias
 
-    def scaling(self, input: np.ndarray) -> np.ndarray:
+    def scaling(self, input: Tensor) -> Tensor:
         return (input - self.bias) * self.scale
 
-    def unscaling(self, input: np.ndarray) -> np.ndarray:
+    def unscaling(self, input: Tensor) -> Tensor:
         return input / self.scale + self.bias
