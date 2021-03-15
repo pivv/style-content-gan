@@ -105,7 +105,8 @@ class ResidualBlock(nn.Module):
         self.activation = activation
         self.pool = pool
 
-        inplace = (self.norm != 'InstanceNorm')
+        #inplace = (self.norm != 'InstanceNorm')
+        inplace = False
         if self.activation == 'ReLU':
             self.relu1 = nn.ReLU(inplace=inplace)
             self.relu2 = nn.ReLU(inplace=inplace)
@@ -210,7 +211,8 @@ class BottleneckBlock(nn.Module):
         assert(output_dim % self.expansion == 0)
         squeeze_dim = output_dim // self.expansion
 
-        inplace = (self.norm != 'InstanceNorm')
+        #inplace = (self.norm != 'InstanceNorm')
+        inplace = False
         if self.activation == 'ReLU':
             self.relu1 = nn.ReLU(inplace=inplace)
             self.relu2 = nn.ReLU(inplace=inplace)
@@ -393,5 +395,10 @@ class ResNet(nn.Module):
 
 
 def simple_resnet(dimension, num_blocks, planes, transpose, norm='BatchNorm', activation='ReLU', pool=False):
+    return ResNet(dimension, ResidualBlock, num_blocks, planes, transpose,
+                  stride=2, norm=norm, activation=activation, pool=pool)
+
+
+def simple_bottleneck_resnet(dimension, num_blocks, planes, transpose, norm='BatchNorm', activation='ReLU', pool=False):
     return ResNet(dimension, BottleneckBlock, num_blocks, planes, transpose,
                   stride=2, norm=norm, activation=activation, pool=pool)

@@ -39,13 +39,6 @@ class BaseModel(nn.Module):
         loss_dict: Dict[str, Tensor] = self.loss_function(batch, output, params, global_step=global_step)
 
         self._update_optimizers(loss_dict, params, global_step=global_step)
-        for optimizer, loss_str in self._optimizers:
-            if loss_str in loss_dict:
-                optimizer.zero_grad()
-                loss_dict[loss_str].backward()
-                if 'clip_size' in params:
-                    clip_grad_norm_(self.parameters(), params['clip_size'])
-                optimizer.step()
 
         loss_dict: Dict[str, Any] = {key: value.item() for key, value in loss_dict.items()}
         return loss_dict
@@ -80,6 +73,8 @@ class BaseModel(nn.Module):
         run_dir = params['run_dir']
         checkpoint_dir = os.path.join(run_dir, 'checkpoint')
         os.makedirs(checkpoint_dir, exist_ok=True)
+        result_dir = os.path.join(run_dir, 'result')
+        os.makedirs(result_dir, exist_ok=True)
         log_dir = os.path.join(run_dir, 'log')
         os.makedirs(log_dir, exist_ok=True)
         writer = SummaryWriter(log_dir)
@@ -101,14 +96,18 @@ class BaseModel(nn.Module):
                     writer.add_scalar(f'train/{key}', loss_dict[key], global_step=istep)
                 if istep % params['checkpoint_interval'] == 0:
                     torch.save(self.state_dict(), os.path.join(checkpoint_dir, f'model_{istep}.pth.tar'))
-                if val_data is not None and istep % params['validation_interval'] == 0:
-                    val_loss_dict: Dict[str, Any] = self.evaluate(val_data, params, global_step=istep)
-                    for key in val_loss_dict:
-                        writer.add_scalar(f'val/{key}', val_loss_dict[key], global_step=istep)
-                    stopping_loss_str: str = params['stopping_loss'] if 'stopping_loss' in params else ''
+                if istep % params['validation_interval'] == 0:
+                    stopping_loss_str = ''
+                    if val_data is not None:
+                        val_loss_dict: Dict[str, Any] = self.evaluate(val_data, params, global_step=istep)
+                        for key in val_loss_dict:
+                            writer.add_scalar(f'val/{key}', val_loss_dict[key], global_step=istep)
+                        stopping_loss_str: str = params['stopping_loss'] if 'stopping_loss' in params else ''
                     if (best_val_loss is None or (not stopping_loss_str) or
                             val_loss_dict[stopping_loss_str] < best_val_loss):
-                        best_istep, best_val_loss = istep, val_loss_dict[stopping_loss_str]
+                        best_istep: int = istep
+                        if val_data is not None:
+                            best_val_loss = val_loss_dict[stopping_loss_str]
                         torch.save(self.state_dict(), os.path.join(run_dir, 'best_model.pth.tar'))
                 if istep % params['logging_interval'] == 0:
                     print(f"[{iepoch}/{num_epoch}] {istep}'th step. " +
@@ -117,6 +116,7 @@ class BaseModel(nn.Module):
                         print("    [VAL] " + ". ".join(f"[{key.upper()}] {value:.6f}" for key, value in
                                                        val_loss_dict.items()))
                     print(f'    Best Step: {best_istep:6d}. Elapsed Time: {time.time()-start_time:3f} seconds.')
+                self._post_processing(batch, params, global_step=istep)
             torch.cuda.empty_cache()
         self.load(os.path.join(run_dir, 'best_model.pth.tar'))
 
@@ -165,4 +165,8 @@ class BaseModel(nn.Module):
     @abstractmethod
     def loss_function(self, batch: Dict[str, Tensor], output: Dict[str, Tensor], params: Dict[str, Any],
                       global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
+        pass
+
+    def _post_processing(self, batch: Dict[str, Tensor], params: Dict[str, Any],
+                         global_step: int = 0) -> None:
         pass
