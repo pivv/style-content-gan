@@ -52,9 +52,9 @@ class BaseModel(nn.Module):
             with torch.no_grad():
                 output: Dict[str, Tensor] = fn(batch, params=params, global_step=global_step)
             for key in batch.keys():
-                batches[key].append(batch[key].detach().cpu().numpy())
+                batches[key].append(batch[key].detach().cpu())
             for key in output.keys():
-                outputs[key].append(output[key].detach().cpu().numpy())
+                outputs[key].append(output[key].detach().cpu())
         all_batch: Dict[str, Tensor] = {key: torch.cat(value, dim=0) for key, value in batches.items()}
         all_output: Dict[str, Tensor] = {key: torch.cat(value, dim=0) for key, value in outputs.items()}
         return all_batch, all_output
@@ -73,7 +73,7 @@ class BaseModel(nn.Module):
         run_dir = params['run_dir']
         checkpoint_dir = os.path.join(run_dir, 'checkpoint')
         os.makedirs(checkpoint_dir, exist_ok=True)
-        result_dir = os.path.join(run_dir, 'result')
+        result_dir = os.path.join(run_dir, 'results')
         os.makedirs(result_dir, exist_ok=True)
         log_dir = os.path.join(run_dir, 'log')
         os.makedirs(log_dir, exist_ok=True)
@@ -141,9 +141,9 @@ class BaseModel(nn.Module):
     def _set_optimizers(self, params: Dict[str, Any]) -> None:
         pass
 
-    def predict(self, data: DataLoader) -> Dict[str, Tensor]:
-        _, output = self._batch_wrapper(self._predict, data)
-        return output
+    def predict(self, data: DataLoader) -> Tuple[Dict[str, Tensor], Dict[str, Tensor]]:
+        input, output = self._batch_wrapper(self._predict, data)
+        return input, output
 
     def predict_one(self, input: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
         batch: Dict[str, Tensor] = {key: torch.FloatTensor(value).unsqueeze(0).to(self._device) for

@@ -10,6 +10,10 @@
 # Excel cache
 **/~$*.xls*
 
+# Run/Result directory
+**/runs/*
+**/results/*
+
 # Temporary directory, files
 **/temp/*
 
