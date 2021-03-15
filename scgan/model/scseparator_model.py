@@ -51,14 +51,13 @@ class SCSeparatorModel(BaseModel):
         self._weight_criterion = nn.MSELoss()
         self._content_criterion = nn.BCEWithLogitsLoss()
         self._style_criterion = nn.BCEWithLogitsLoss()
-        self._entropy_criterion = BinaryEntropyWithLogitsLoss()
-        self._siamese_criterion = SiameseLoss()
+        #self._siamese_criterion = SiameseLoss()
 
         self.to(self._device)
 
     def _update_optimizers(self, loss_dict: Dict[str, Tensor], params: Dict[str, Any],
                            global_step: int = 0) -> None:
-        (optimizer_enc, optimizer_dec, optimizer_w, optimizer_content, optimizer_style) = self._optimizers
+        #(optimizer_enc, optimizer_dec, optimizer_w, optimizer_content, optimizer_style) = self._optimizers
 
         loss: Tensor = loss_dict['loss']
         #loss_idt: Tensor = loss_dict['loss_idt']
@@ -67,26 +66,16 @@ class SCSeparatorModel(BaseModel):
         #loss_style: Tensor = loss_dict['loss_style']
         #loss_siamese: Tensor = loss_dict['loss_siamese']
 
-        optimizer_enc.zero_grad()
-        optimizer_dec.zero_grad()
-        optimizer_w.zero_grad()
-        optimizer_content.zero_grad()
-        optimizer_style.zero_grad()
+        for optimizer in self._optimizers:
+            optimizer.zero_grad()
 
         loss.backward()
         #(loss_idt + loss_cycle + loss_content + loss_style + loss_siamese).backward(retain_graph=True)
         if 'clip_size' in params:
-            clip_grad_norm_(self._encoder.parameters(), params['clip_size'])
-            clip_grad_norm_(self._decoder.parameters(), params['clip_size'])
-            clip_grad_norm_(self._style_w.parameters(), params['clip_size'])
-            clip_grad_norm_(self._content_disc.parameters(), params['clip_size'])
-            clip_grad_norm_(self._style_disc.parameters(), params['clip_size'])
+            clip_grad_norm_(self.parameters(), params['clip_size'])
 
-        optimizer_enc.step()
-        optimizer_dec.step()
-        optimizer_w.step()
-        optimizer_content.step()
-        optimizer_style.step()
+        for optimizer in self._optimizers:
+            optimizer.step()
 
     def _update_schedulers(self, params: Dict[str, Any], global_step: int = 0) -> None:
         if global_step % params['scheduler_interval'] == 0:
@@ -180,7 +169,7 @@ class SCSeparatorModel(BaseModel):
 
         # Identity Loss
         xp1_idt: Tensor = self._decoder(z1)
-        #xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
+        xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
         xp2_idt: Tensor = self._decoder(z2)
 
         # Weight Cycle Loss
@@ -207,7 +196,7 @@ class SCSeparatorModel(BaseModel):
 
         output: Dict[str, Tensor] = {'xp1': xp1, 'xp2': xp2,
                                      'z1': z1, 'z2': z2, 's1': s1, 's2': s2, 'c1': c1, 'c2': c2,
-                                     'xp1_idt': xp1_idt,  'xp2_idt': xp2_idt,
+                                     'xp1_idt': xp1_idt, 'xp1_idt2': xp1_idt2, 'xp2_idt': xp2_idt,
                                      'c1_detach': c1_detach, 'c2_detach': c2_detach,
                                      's1_detach': s1_detach, 's2_detach': s2_detach,
                                      'c1_idt': c1_idt, 'c2_idt': c2_idt, 's1_idt': s1_idt, 's2_idt': s2_idt,
@@ -228,11 +217,14 @@ class SCSeparatorModel(BaseModel):
         xp1: Tensor = output['xp1']
         xp2: Tensor = output['xp2']
         xp1_idt: Tensor = output['xp1_idt']
-        #xp1_idt2: Tensor = output['xp1_idt2']
+        xp1_idt2: Tensor = output['xp1_idt2']
         xp2_idt: Tensor = output['xp2_idt']
         assert(xp1[:, :3].size() == xp1_idt.size() and xp2[:, :3].size() == xp2_idt.size())
+        #loss_idt: Tensor = lambda_idt * (
+        #        self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
         loss_idt: Tensor = lambda_idt * (
-                self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
+                self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp1_idt2, xp1[:, :3]) +
+                self._identity_criterion(xp2_idt, xp2[:, :3])) / 3.
 
         # 2. Weight Cycle Loss
         c1_detach: Tensor = output['c1_detach']
@@ -327,7 +319,7 @@ class SCSeparatorMnistModel(SCSeparatorModel):
 class SCSeparatorBeautyganModel(SCSeparatorModel):
     def __init__(self, device) -> None:
         dimension = 2
-        in_channels = 3 + 15
+        in_channels = 3
         out_channels = 3
         latent_dim = 256
         num_blocks = [4, 4]
@@ -335,34 +327,133 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
 
         encoder: nn.Module = nn.Sequential(
             nn.Conv2d(in_channels, planes[0], kernel_size=7, stride=1, padding=3, bias=False),
-            nn.BatchNorm2d(planes[0]), nn.LeakyReLU(0.01), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            nn.InstanceNorm2d(planes[0]), nn.LeakyReLU(0.01), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
             simple_resnet(dimension, num_blocks, planes,
-                          transpose=False, norm='BatchNorm', activation='LeakyReLU', pool=False),
+                          transpose=False, norm='InstanceNorm', activation='LeakyReLU', pool=False),
             Permute((0, 2, 3, 1)), nn.Linear(planes[-1], latent_dim))
         decoder: nn.Module = nn.Sequential(
             nn.Linear(latent_dim, planes[-1]), Permute((0, 3, 1, 2)),
             simple_resnet(dimension, num_blocks, planes,
-                          transpose=True, norm='BatchNorm', activation='LeakyReLU', pool=False),
+                          transpose=True, norm='InstanceNorm', activation='LeakyReLU', pool=False),
             nn.ConvTranspose2d(planes[0], planes[0], kernel_size=3, stride=2, padding=1, output_padding=1, bias=False),
-            nn.BatchNorm2d(planes[0]), nn.LeakyReLU(0.01),
+            nn.InstanceNorm2d(planes[0]), nn.LeakyReLU(0.01),
             nn.ConvTranspose2d(planes[0], out_channels, kernel_size=7, stride=1, padding=3, output_padding=0),
             nn.Tanh())
         style_w: nn.Module = nn.Linear(latent_dim, latent_dim, bias=False)
         content_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
-            nn.Conv2d(latent_dim, 128, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(128), nn.LeakyReLU(0.01),
-            nn.Conv2d(128, 64, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(64), nn.LeakyReLU(0.01),
-            nn.Conv2d(64, 32, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(32), nn.LeakyReLU(0.01),
-            nn.Conv2d(32, 16, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(16), nn.LeakyReLU(0.01),
-            nn.Flatten(), nn.Linear(2*2*16, 1))
+            nn.Conv2d(latent_dim, 64, kernel_size=3, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64), nn.LeakyReLU(0.01),
+            nn.Conv2d(64, 32, kernel_size=3, stride=2, padding=1, bias=False), nn.InstanceNorm2d(32), nn.LeakyReLU(0.01),
+            nn.Conv2d(32, 16, kernel_size=3, stride=2, padding=1, bias=False), nn.InstanceNorm2d(16), nn.LeakyReLU(0.01),
+            nn.Flatten(), nn.Linear(4*4*16, 1))
         style_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
-            nn.Conv2d(latent_dim, 128, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(128), nn.LeakyReLU(0.01),
-            nn.Conv2d(128, 64, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(64), nn.LeakyReLU(0.01),
-            nn.Conv2d(64, 32, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(32), nn.LeakyReLU(0.01),
-            nn.Conv2d(32, 16, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(16), nn.LeakyReLU(0.01),
-            nn.Flatten(), nn.Linear(2*2*16, 1))
+            nn.Conv2d(latent_dim, 64, kernel_size=3, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64), nn.LeakyReLU(0.01),
+            nn.Conv2d(64, 32, kernel_size=3, stride=2, padding=1, bias=False), nn.InstanceNorm2d(32), nn.LeakyReLU(0.01),
+            nn.Conv2d(32, 16, kernel_size=3, stride=2, padding=1, bias=False), nn.InstanceNorm2d(16), nn.LeakyReLU(0.01),
+            nn.Flatten(), nn.Linear(4*4*16, 1))
         scaler: Scaler = Scaler(2., 0.5)
+
+        self._content_seg_disc: nn.Module = nn.Sequential(
+            Permute((0, 3, 1, 2)),
+            nn.Conv2d(latent_dim, 128, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(128), nn.LeakyReLU(0.01),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(128), nn.LeakyReLU(0.01),
+            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(64), nn.LeakyReLU(0.01),
+            nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1, bias=False),
+            nn.InstanceNorm2d(64), nn.LeakyReLU(0.01), nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3))
+        self._style_seg_disc: nn.Module = nn.Sequential(
+            Permute((0, 3, 1, 2)),
+            nn.Conv2d(latent_dim, 128, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(128), nn.LeakyReLU(0.01),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(128), nn.LeakyReLU(0.01),
+            nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(64), nn.LeakyReLU(0.01),
+            nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1, bias=False),
+            nn.InstanceNorm2d(64), nn.LeakyReLU(0.01), nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3))
+
+        self._content_seg_criterion = nn.CrossEntropyLoss()
+        self._style_seg_criterion = nn.CrossEntropyLoss()
 
         super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
         self.apply(weights_init)
+
+    def _update_optimizers(self, loss_dict: Dict[str, Tensor], params: Dict[str, Any],
+                           global_step: int = 0) -> None:
+        super()._update_optimizers(loss_dict, params, global_step)
+
+    def _update_schedulers(self, params: Dict[str, Any], global_step: int = 0) -> None:
+        super()._update_schedulers(params, global_step)
+
+    def _set_optimizers(self, params: Dict[str, Any]) -> None:
+        super()._set_optimizers(params)
+        weight_decay: float = params['weight_decay']
+        optimizer_content_seg = optim.Adam(self._content_seg_disc.parameters(), params['learning_rate'], weight_decay=weight_decay)
+        optimizer_style_seg = optim.Adam(self._style_seg_disc.parameters(), params['learning_rate'], weight_decay=weight_decay)
+
+        self._optimizers += [optimizer_content_seg, optimizer_style_seg]
+        self._schedulers += [optim.lr_scheduler.ExponentialLR(optimizer, gamma=params['scheduler_gamma']) for
+                             optimizer in [optimizer_content_seg, optimizer_style_seg]]
+
+    def forward(self, batch: Dict[str, Tensor], params: Dict[str, Any],
+                global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
+        gamma_content_seg = params['gamma_content_seg']
+        gamma_style_seg = params['gamma_style_seg']
+
+        output: Dict[str, Tensor] = super().forward(batch, params, global_step)
+
+        c1: Tensor = output['c1']
+        c2: Tensor = output['c2']
+        s1: Tensor = output['s1']
+        s2: Tensor = output['s2']
+
+        # Content Segmentation Disc Loss
+        b1_content_seg: Tensor = self._content_seg_disc(grad_scale(c1, gamma=gamma_content_seg))
+        b2_content_seg: Tensor = self._content_seg_disc(grad_scale(c2, gamma=gamma_content_seg))
+
+        # Style Segmentation Disc Loss
+        b1_style_seg: Tensor = self._style_seg_disc(s1.detach())
+        b2_style_seg: Tensor = self._style_seg_disc(grad_reverse(s2, gamma=gamma_style_seg))
+
+        output.update({'b1_content_seg': b1_content_seg, 'b2_content_seg': b2_content_seg,
+                       'b1_style_seg': b1_style_seg, 'b2_style_seg': b2_style_seg})
+        return output
+
+    def loss_function(self, batch: Dict[str, Tensor], output: Dict[str, Tensor], params: Dict[str, Any],
+                      global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
+        loss_dict: Dict[str, Tensor] = super().loss_function(batch, output, params, global_step)
+
+        # 0. Parameters
+        lambda_content_seg: float = params['lambda_content_seg']
+        lambda_style_seg: float = params['lambda_style_seg']
+
+        # 1. Content Seg Disc Loss
+        seg1: Tensor = batch['seg1']
+        seg2: Tensor = batch['seg2']
+        b1_content_seg: Tensor = output['b1_content_seg']
+        b2_content_seg: Tensor = output['b2_content_seg']
+        loss_content_seg: Tensor = lambda_content_seg * (
+                self._content_seg_criterion(b1_content_seg, seg1) +
+                self._content_seg_criterion(b2_content_seg, seg2)) / 2.
+        correct1: Tensor = b1_content_seg.argmax(dim=1) == seg1
+        correct2: Tensor = b2_content_seg.argmax(dim=1) == seg2
+        accuracy_content_seg: Tensor = (correct1.sum() + correct2.sum()) / float(torch.numel(correct1) +
+                                                                                 torch.numel(correct2))
+
+        # 2. Style Seg Disc Loss
+        seg1: Tensor = batch['seg1']
+        seg2: Tensor = batch['seg2']
+        b1_style_seg: Tensor = output['b1_style_seg']
+        b2_style_seg: Tensor = output['b2_style_seg']
+        loss_style_seg: Tensor = lambda_style_seg * (
+                self._style_seg_criterion(b1_style_seg, seg1) +
+                self._style_seg_criterion(b2_style_seg, seg2)) / 2.
+        correct1: Tensor = b1_style_seg.argmax(dim=1) == seg1
+        correct2: Tensor = b2_style_seg.argmax(dim=1) == seg2
+        accuracy_style_seg: Tensor = (correct1.sum() + correct2.sum()) / float(torch.numel(correct1) +
+                                                                               torch.numel(correct2))
+
+        loss: Tensor = loss_dict['loss'] + loss_content_seg + loss_style_seg
+
+        loss_dict: Dict[str, Tensor] = {'loss': loss,
+                                        'loss_content_seg': loss_content_seg, 'accuracy_content_seg': accuracy_content_seg,
+                                        'loss_style_seg': loss_style_seg, 'accuracy_style_seg': accuracy_style_seg}
+        return loss_dict
+
