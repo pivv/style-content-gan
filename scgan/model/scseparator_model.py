@@ -454,8 +454,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
 
         loss: Tensor = loss_dict['loss'] + loss_content_seg + loss_style_seg
 
-        loss_dict: Dict[str, Tensor] = {'loss': loss,
-                                        'loss_content_seg': loss_content_seg, 'accuracy_content_seg': accuracy_content_seg,
-                                        'loss_style_seg': loss_style_seg, 'accuracy_style_seg': accuracy_style_seg}
+        loss_dict.update({'loss': loss,
+                          'loss_content_seg': loss_content_seg, 'accuracy_content_seg': accuracy_content_seg,
+                          'loss_style_seg': loss_style_seg, 'accuracy_style_seg': accuracy_style_seg})
         return loss_dict
 
