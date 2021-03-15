@@ -187,7 +187,7 @@ class SCSeparatorModel(BaseModel):
         c2_idt: Tensor = z21 - s1_idt
 
         # Content Disc Loss
-        b1_content: Tensor = self._content_disc(grad_reverse(c1, gamma=gamma_content))
+        b1_content: Tensor = self._content_disc(c1.detach())
         b2_content: Tensor = self._content_disc(grad_reverse(c2, gamma=gamma_content))
 
         # Style Disc Loss
@@ -411,7 +411,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b2_content_seg: Tensor = self._content_seg_disc(grad_scale(c2, gamma=gamma_content_seg))
 
         # Style Segmentation Disc Loss
-        b1_style_seg: Tensor = self._style_seg_disc(s1.detach())
+        b1_style_seg: Tensor = self._style_seg_disc(grad_reverse(s1, gamma=gamma_style_seg))
         b2_style_seg: Tensor = self._style_seg_disc(grad_reverse(s2, gamma=gamma_style_seg))
 
         output.update({'b1_content_seg': b1_content_seg, 'b2_content_seg': b2_content_seg,
