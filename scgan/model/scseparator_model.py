@@ -187,7 +187,7 @@ class SCSeparatorModel(BaseModel):
         c2_idt: Tensor = z21 - s1_idt
 
         # Content Disc Loss
-        b1_content: Tensor = self._content_disc(c1.detach())
+        b1_content: Tensor = self._content_disc(grad_reverse(c1, gamma=gamma_content))
         b2_content: Tensor = self._content_disc(grad_reverse(c2, gamma=gamma_content))
 
         # Style Disc Loss
