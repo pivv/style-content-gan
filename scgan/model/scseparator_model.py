@@ -354,6 +354,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
             nn.Flatten(), nn.Linear(4*4*16, 1))
         scaler: Scaler = Scaler(2., 0.5)
 
+        super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
+
         self._content_seg_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
             nn.Conv2d(latent_dim, 128, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(128), nn.LeakyReLU(0.01),
@@ -372,7 +374,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         self._content_seg_criterion = nn.CrossEntropyLoss()
         self._style_seg_criterion = nn.CrossEntropyLoss()
 
-        super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
+        self.to(self._device)
         self.apply(weights_init)
 
     def _update_optimizers(self, loss_dict: Dict[str, Tensor], params: Dict[str, Any],
