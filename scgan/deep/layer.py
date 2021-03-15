@@ -11,3 +11,12 @@ class View(nn.Module):
 
     def forward(self, x):
         return x.view(*self.shape)
+
+
+class Permute(nn.Module):
+    def __init__(self, dims):
+        super().__init__()
+        self.dims = dims
+
+    def forward(self, x):
+        return x.permute(*self.dims)

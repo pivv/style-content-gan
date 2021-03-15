@@ -28,7 +28,7 @@ import matplotlib.pyplot as plt
 from .base_model import BaseModel
 from scgan.util.scaler import Scaler
 from scgan.deep.loss import SiameseLoss, BinaryEntropyWithLogitsLoss
-from scgan.deep.layer import View
+from scgan.deep.layer import View, Permute
 from scgan.deep.grad import grad_scale, grad_reverse
 from scgan.deep.resnet import weights_init, simple_resnet, simple_bottleneck_resnet
 
@@ -149,9 +149,9 @@ class SCSeparatorModel(BaseModel):
             fig = plt.figure(figsize=(20, 20))
             for index in range(8):
                 ax = fig.add_subplot(8, 8, 8*index+1)
-                ax.imshow(batch['x1'][index].detach().cpu().numpy().transpose(1, 2, 0))
+                ax.imshow(batch['x1'][index, :3].detach().cpu().numpy().transpose(1, 2, 0))
                 ax = fig.add_subplot(8, 8, 8*index+2)
-                ax.imshow(batch['x2'][index].detach().cpu().numpy().transpose(1, 2, 0))
+                ax.imshow(batch['x2'][index, :3].detach().cpu().numpy().transpose(1, 2, 0))
                 ax = fig.add_subplot(8, 8, 8*index+3)
                 ax.imshow(output['x1_idt'][index].detach().cpu().numpy().transpose(1, 2, 0))
                 ax = fig.add_subplot(8, 8, 8*index+4)
@@ -230,9 +230,9 @@ class SCSeparatorModel(BaseModel):
         xp1_idt: Tensor = output['xp1_idt']
         #xp1_idt2: Tensor = output['xp1_idt2']
         xp2_idt: Tensor = output['xp2_idt']
-        assert(xp1.size() == xp1_idt.size() and xp2.size() == xp2_idt.size())
+        assert(xp1[:, :3].size() == xp1_idt.size() and xp2[:, :3].size() == xp2_idt.size())
         loss_idt: Tensor = lambda_idt * (
-                self._identity_criterion(xp1_idt, xp1) + self._identity_criterion(xp2_idt, xp2)) / 2.
+                self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
 
         # 2. Weight Cycle Loss
         c1_detach: Tensor = output['c1_detach']
@@ -286,7 +286,7 @@ class SCSeparatorModel(BaseModel):
         return loss_dict
 
 
-class SCSeparatorResnetModel(SCSeparatorModel):
+class SCSeparatorMnistModel(SCSeparatorModel):
     def __init__(self, device) -> None:
         dimension = 2
         in_channels = 3
@@ -312,12 +312,56 @@ class SCSeparatorResnetModel(SCSeparatorModel):
         content_disc: nn.Module = nn.Sequential(
             nn.Linear(latent_dim, 256, bias=False), nn.BatchNorm1d(256), nn.LeakyReLU(0.01),
             nn.Linear(256, 64, bias=False), nn.BatchNorm1d(64), nn.LeakyReLU(0.01),
-            nn.Linear(64, 1), nn.Flatten())
+            nn.Linear(64, 1))
         style_disc: nn.Module = nn.Sequential(
             #nn.Dropout(p=0.5, inplace=False),
             nn.Linear(latent_dim, 256, bias=False), nn.BatchNorm1d(256), nn.LeakyReLU(0.01),
             nn.Linear(256, 64, bias=False), nn.BatchNorm1d(64), nn.LeakyReLU(0.01),
-            nn.Linear(64, 1), nn.Flatten())
+            nn.Linear(64, 1))
+        scaler: Scaler = Scaler(2., 0.5)
+
+        super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
+        self.apply(weights_init)
+
+
+class SCSeparatorBeautyganModel(SCSeparatorModel):
+    def __init__(self, device) -> None:
+        dimension = 2
+        in_channels = 3 + 15
+        out_channels = 3
+        latent_dim = 256
+        num_blocks = [4, 4]
+        planes = [64, 128, 256]
+
+        encoder: nn.Module = nn.Sequential(
+            nn.Conv2d(in_channels, planes[0], kernel_size=7, stride=1, padding=3, bias=False),
+            nn.BatchNorm2d(planes[0]), nn.LeakyReLU(0.01), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            simple_resnet(dimension, num_blocks, planes,
+                          transpose=False, norm='BatchNorm', activation='LeakyReLU', pool=False),
+            Permute((0, 2, 3, 1)), nn.Linear(planes[-1], latent_dim))
+        decoder: nn.Module = nn.Sequential(
+            nn.Linear(latent_dim, planes[-1]), Permute((0, 3, 1, 2)),
+            simple_resnet(dimension, num_blocks, planes,
+                          transpose=True, norm='BatchNorm', activation='LeakyReLU', pool=False),
+            nn.ConvTranspose2d(planes[0], planes[0], kernel_size=3, stride=2, padding=1, output_padding=1, bias=False),
+            nn.BatchNorm2d(planes[0]), nn.LeakyReLU(0.01),
+            nn.ConvTranspose2d(planes[0], out_channels, kernel_size=7, stride=1, padding=3, output_padding=0),
+            nn.Tanh())
+        style_w: nn.Module = nn.Linear(latent_dim, latent_dim, bias=False)
+        content_disc: nn.Module = nn.Sequential(
+            Permute((0, 3, 1, 2)),
+            nn.Conv2d(latent_dim, 128, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(128), nn.LeakyReLU(0.01),
+            nn.Conv2d(128, 64, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(64), nn.LeakyReLU(0.01),
+            nn.Conv2d(64, 32, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(32), nn.LeakyReLU(0.01),
+            nn.Conv2d(32, 16, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(16), nn.LeakyReLU(0.01),
+            nn.Flatten(), nn.Linear(2*2*16, 1))
+        style_disc: nn.Module = nn.Sequential(
+            Permute((0, 3, 1, 2)),
+            nn.Conv2d(latent_dim, 128, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(128), nn.LeakyReLU(0.01),
+            nn.Conv2d(128, 64, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(64), nn.LeakyReLU(0.01),
+            nn.Conv2d(64, 32, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(32), nn.LeakyReLU(0.01),
+            nn.Conv2d(32, 16, kernel_size=3, stride=2, padding=1, bias=False), nn.BatchNorm2d(16), nn.LeakyReLU(0.01),
+            nn.Flatten(), nn.Linear(2*2*16, 1))
         scaler: Scaler = Scaler(2., 0.5)
 
         super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
