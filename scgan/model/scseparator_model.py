@@ -359,16 +359,16 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
 
         self._source_disc: nn.Module = nn.Sequential(
-            spectral_norm(nn.Conv2d(in_channels, 16, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(in_channels, 32, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(32, 32, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             nn.Flatten(), nn.Linear(4*4*128, 1))
         self._reference_disc: nn.Module = nn.Sequential(
-            spectral_norm(nn.Conv2d(in_channels, 16, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(in_channels, 32, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(32, 32, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
