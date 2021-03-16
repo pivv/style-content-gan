@@ -344,35 +344,35 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         style_w: nn.Module = nn.Linear(latent_dim, latent_dim, bias=False)
         content_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
-            spectral_norm(nn.Conv2d(latent_dim, 64, kernel_size=3, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(latent_dim, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
             nn.Flatten(), nn.Linear(4*4*64, 1))
         style_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
-            spectral_norm(nn.Conv2d(latent_dim, 64, kernel_size=3, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(latent_dim, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
             nn.Flatten(), nn.Linear(4*4*64, 1))
         scaler: Scaler = Scaler(2., 0.5)
 
         super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
 
         self._source_disc: nn.Module = nn.Sequential(
-            spectral_norm(nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(in_channels, 16, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             nn.Flatten(), nn.Linear(4*4*128, 1))
         self._reference_disc: nn.Module = nn.Sequential(
-            spectral_norm(nn.Conv2d(in_channels, 16, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(16, 32, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(32, 64, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(64, 64, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(64, 128, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
-            spectral_norm(nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(in_channels, 16, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(16, 32, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             nn.Flatten(), nn.Linear(4*4*128, 1))
 
         self._content_seg_disc: nn.Module = nn.Sequential(
