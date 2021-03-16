@@ -170,7 +170,7 @@ class SCSeparatorModel(BaseModel):
 
         # Identity Loss
         xp1_idt: Tensor = self._decoder(z1)
-        xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
+        #xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
         xp2_idt: Tensor = self._decoder(z2)
 
         # Weight Cycle Loss
@@ -197,7 +197,7 @@ class SCSeparatorModel(BaseModel):
 
         output: Dict[str, Tensor] = {'xp1': xp1, 'xp2': xp2,
                                      'z1': z1, 'z2': z2, 's1': s1, 's2': s2, 'c1': c1, 'c2': c2,
-                                     'xp1_idt': xp1_idt, 'xp1_idt2': xp1_idt2, 'xp2_idt': xp2_idt,
+                                     'xp1_idt': xp1_idt, 'xp2_idt': xp2_idt, #'xp1_idt2': xp1_idt2,
                                      'c1_detach': c1_detach, 'c2_detach': c2_detach,
                                      's1_detach': s1_detach, 's2_detach': s2_detach,
                                      'c1_idt': c1_idt, 'c2_idt': c2_idt, 's1_idt': s1_idt, 's2_idt': s2_idt,
@@ -218,7 +218,7 @@ class SCSeparatorModel(BaseModel):
         xp1: Tensor = output['xp1']
         xp2: Tensor = output['xp2']
         xp1_idt: Tensor = output['xp1_idt']
-        xp1_idt2: Tensor = output['xp1_idt2']
+        #xp1_idt2: Tensor = output['xp1_idt2']
         xp2_idt: Tensor = output['xp2_idt']
         assert(xp1[:, :3].size() == xp1_idt.size() and xp2[:, :3].size() == xp2_idt.size())
         loss_idt: Tensor = lambda_idt * (
@@ -357,13 +357,14 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
 
         super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
 
-        #self._source_disc: nn.Module = nn.Sequential(
-        #    Permute((0, 3, 1, 2)),
-        #    spectral_norm(nn.Conv2d(latent_dim, 128, kernel_size=3, stride=1, padding=1, bias=False)), nn.LeakyReLU(0.01),
-        #    spectral_norm(nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=False)), nn.LeakyReLU(0.01),
-        #    spectral_norm(nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1, bias=False)), nn.LeakyReLU(0.01),
-        #    spectral_norm(nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1, bias=False)),
-        #    nn.LeakyReLU(0.01), nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3))
+        self._source_disc: nn.Module = nn.Sequential(
+            Permute((0, 3, 1, 2)),
+            spectral_norm(nn.Conv2d(latent_dim, 128, kernel_size=3, stride=1, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1, bias=False)),
+            nn.LeakyReLU(0.01), nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3))
+        self._reference_disc: nn.Module = None
 
         self._content_seg_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
@@ -380,6 +381,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
             spectral_norm(nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True)),
             nn.LeakyReLU(0.01), nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3))
 
+        self._source_criterion = nn.BCEWithLogitsLoss()
+        self._reference_criterion = nn.BCEWithLogitsLoss()
         self._content_seg_criterion = nn.CrossEntropyLoss()
         self._style_seg_criterion = nn.CrossEntropyLoss()
 
@@ -405,6 +408,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
 
     def forward(self, batch: Dict[str, Tensor], params: Dict[str, Any],
                 global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
+        gamma_source = params['gamma_source']
+        gamma_reference = params['gamma_reference']
         gamma_content_seg = params['gamma_content_seg']
         gamma_style_seg = params['gamma_style_seg']
 
@@ -415,6 +420,16 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         s1: Tensor = output['s1']
         s2: Tensor = output['s2']
 
+        # Source Disc Loss
+        xp1: Tensor = output['xp1']
+        xp2: Tensor = output['xp2']
+        b1_source: Tensor = self._source_disc(xp1.detach())
+        b2_source: Tensor = self._source_disc(grad_reverse(self._decoder(c2 + s1), gamma=gamma_source))
+
+        # Reference Disc Loss
+        b1_reference: Tensor = self._source_disc(xp2.detach())
+        b2_reference: Tensor = self._source_disc(grad_reverse(self._decoder(c1 + s2), gamma=gamma_source))
+
         # Content Segmentation Disc Loss
         b1_content_seg: Tensor = self._content_seg_disc(grad_scale(c1, gamma=gamma_content_seg))
         b2_content_seg: Tensor = self._content_seg_disc(grad_scale(c2, gamma=gamma_content_seg))
@@ -423,7 +438,9 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_style_seg: Tensor = self._style_seg_disc(grad_reverse(s1, gamma=gamma_style_seg))
         b2_style_seg: Tensor = self._style_seg_disc(grad_reverse(s2, gamma=gamma_style_seg))
 
-        output.update({'b1_content_seg': b1_content_seg, 'b2_content_seg': b2_content_seg,
+        output.update({'b1_source': b1_source, 'b2_source': b2_source,
+                       'b1_reference': b1_reference, 'b2_reference': b2_reference,
+                       'b1_content_seg': b1_content_seg, 'b2_content_seg': b2_content_seg,
                        'b1_style_seg': b1_style_seg, 'b2_style_seg': b2_style_seg})
         return output
 
@@ -432,10 +449,32 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         loss_dict: Dict[str, Tensor] = super().loss_function(batch, output, params, global_step)
 
         # 0. Parameters
+        lambda_source: float = params['lambda_source']
+        lambda_reference: float = params['lambda_reference']
         lambda_content_seg: float = params['lambda_content_seg']
         lambda_style_seg: float = params['lambda_style_seg']
 
-        # 1. Content Seg Disc Loss
+        # 1. Source Disc Loss
+        b1_source: Tensor = output['b1_source']
+        b2_source: Tensor = output['b2_source']
+        loss_source: Tensor = lambda_source * (
+                self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
+                self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
+        correct1: Tensor = b1_source < 0
+        correct2: Tensor = b2_source >= 0
+        accuracy_source: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_source) + len(b2_source))
+
+        # 2. Reference Disc Loss
+        b1_reference: Tensor = output['b1_reference']
+        b2_reference: Tensor = output['b2_reference']
+        loss_reference: Tensor = lambda_reference * (
+                self._reference_criterion(b1_reference, torch.zeros_like(b1_reference)) +
+                self._reference_criterion(b2_reference, torch.ones_like(b2_reference))) / 2.
+        correct1: Tensor = b1_reference < 0
+        correct2: Tensor = b2_reference >= 0
+        accuracy_reference: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_reference) + len(b2_reference))
+
+        # 3. Content Seg Disc Loss
         seg1: Tensor = batch['seg1']
         seg2: Tensor = batch['seg2']
         b1_content_seg: Tensor = output['b1_content_seg']
@@ -448,7 +487,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         accuracy_content_seg: Tensor = (correct1.sum() + correct2.sum()) / float(torch.numel(correct1) +
                                                                                  torch.numel(correct2))
 
-        # 2. Style Seg Disc Loss
+        # 4. Style Seg Disc Loss
         seg1: Tensor = batch['seg1']
         seg2: Tensor = batch['seg2']
         b1_style_seg: Tensor = output['b1_style_seg']
@@ -461,9 +500,11 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         accuracy_style_seg: Tensor = (correct1.sum() + correct2.sum()) / float(torch.numel(correct1) +
                                                                                torch.numel(correct2))
 
-        loss: Tensor = loss_dict['loss'] + loss_content_seg + loss_style_seg
+        loss: Tensor = loss_dict['loss'] + loss_source + loss_reference + loss_content_seg + loss_style_seg
 
         loss_dict.update({'loss': loss,
+                          'loss_source': loss_source, 'accuracy_source': accuracy_source,
+                          'loss_reference': loss_reference, 'accuracy_reference': accuracy_reference,
                           'loss_content_seg': loss_content_seg, 'accuracy_content_seg': accuracy_content_seg,
                           'loss_style_seg': loss_style_seg, 'accuracy_style_seg': accuracy_style_seg})
         return loss_dict
