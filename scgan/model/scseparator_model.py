@@ -49,7 +49,8 @@ class SCSeparatorModel(BaseModel):
         self._scaler = scaler
 
         self._identity_criterion = nn.MSELoss()
-        self._weight_criterion = nn.MSELoss()
+        self._latent_identity_criterion = nn.MSELoss()
+        self._weight_cycle_criterion = nn.MSELoss()
         self._content_criterion = nn.BCEWithLogitsLoss()
         self._style_criterion = nn.BCEWithLogitsLoss()
         #self._siamese_criterion = SiameseLoss()
@@ -62,7 +63,7 @@ class SCSeparatorModel(BaseModel):
 
         loss: Tensor = loss_dict['loss']
         #loss_idt: Tensor = loss_dict['loss_idt']
-        #loss_cycle: Tensor = loss_dict['loss_cycle']
+        #loss_weight_cycle: Tensor = loss_dict['loss_weight_cycle']
         #loss_content: Tensor = loss_dict['loss_content']
         #loss_style: Tensor = loss_dict['loss_style']
         #loss_siamese: Tensor = loss_dict['loss_siamese']
@@ -71,7 +72,7 @@ class SCSeparatorModel(BaseModel):
             optimizer.zero_grad()
 
         loss.backward()
-        #(loss_idt + loss_cycle + loss_content + loss_style + loss_siamese).backward(retain_graph=True)
+        #(loss_idt + loss_weight_cycle + loss_content + loss_style + loss_siamese).backward(retain_graph=True)
         if 'clip_size' in params:
             clip_grad_norm_(self.parameters(), params['clip_size'])
 
@@ -173,11 +174,17 @@ class SCSeparatorModel(BaseModel):
         #xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
         xp2_idt: Tensor = self._decoder(z2)
 
+        # Latent Identity Loss
+        z1_detach: Tensor = z1.detach()
+        z2_detach: Tensor = z2.detach()
+        z1_idt: Tensor = self._encoder(self._decoder(z1_detach))  # Latent
+        z2_idt: Tensor = self._encoder(self._decoder(z2_detach))  # Latent
+
         # Weight Cycle Loss
-        s1_detach: Tensor = self._style_w(z1.detach())
-        c1_detach: Tensor = z1.detach() - s1_detach
-        s2_detach: Tensor = self._style_w(z2.detach())
-        c2_detach: Tensor = z2.detach() - s2_detach
+        s1_detach: Tensor = self._style_w(z1_detach)
+        c1_detach: Tensor = z1_detach - s1_detach
+        s2_detach: Tensor = self._style_w(z2_detach)
+        c2_detach: Tensor = z2_detach - s2_detach
         z12: Tensor = (c1_detach + s2_detach)
         #z12: Tensor = (c1 + s2)
         s2_idt: Tensor = self._style_w(z12)
@@ -198,6 +205,7 @@ class SCSeparatorModel(BaseModel):
         output: Dict[str, Tensor] = {'xp1': xp1, 'xp2': xp2,
                                      'z1': z1, 'z2': z2, 's1': s1, 's2': s2, 'c1': c1, 'c2': c2,
                                      'xp1_idt': xp1_idt, 'xp2_idt': xp2_idt, #'xp1_idt2': xp1_idt2,
+                                     'z1_detach': z1_detach, 'z2_detach': z2_detach, 'z1_idt': z1_idt, 'z2_idt': z2_idt,
                                      'c1_detach': c1_detach, 'c2_detach': c2_detach,
                                      's1_detach': s1_detach, 's2_detach': s2_detach,
                                      'c1_idt': c1_idt, 'c2_idt': c2_idt, 's1_idt': s1_idt, 's2_idt': s2_idt,
@@ -208,8 +216,9 @@ class SCSeparatorModel(BaseModel):
     def loss_function(self, batch: Dict[str, Tensor], output: Dict[str, Tensor], params: Dict[str, Any],
                       global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
         # 0. Parameters
-        lambda_idt: float = params['lambda_idt']
-        lambda_cycle: float = params['lambda_cycle']
+        lambda_idt: float = params['lambda_identity']
+        lambda_latent_idt: float = params['lambda_latent_identity']
+        lambda_weight_cycle: float = params['lambda_weight_cycle']
         lambda_content: float = params['lambda_content']
         lambda_style: float = params['lambda_style']
         lambda_siamese: float = params['lambda_siamese']
@@ -227,6 +236,15 @@ class SCSeparatorModel(BaseModel):
         #        (self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp1_idt2, xp1[:, :3])) / 2. +
         #        self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
 
+        # 2. Latent Identity Loss
+        z1_detach: Tensor = output['z1_detach']
+        z2_detach: Tensor = output['z2_detach']
+        z1_idt: Tensor = output['z1_idt']
+        z2_idt: Tensor = output['z2_idt']
+        loss_latent_idt: Tensor = lambda_latent_idt * (
+                self._latent_identity_criterion(z1_idt, z1_detach) +
+                self._latent_identity_criterion(z2_idt, z2_detach)) / 2.
+
         # 2. Weight Cycle Loss
         c1_detach: Tensor = output['c1_detach']
         c2_detach: Tensor = output['c2_detach']
@@ -236,9 +254,9 @@ class SCSeparatorModel(BaseModel):
         c2_idt: Tensor = output['c2_idt']
         s1_idt: Tensor = output['s1_idt']
         s2_idt: Tensor = output['s2_idt']
-        loss_cycle: Tensor = lambda_cycle * (
-                self._weight_criterion(c1_idt, c1_detach) + self._weight_criterion(c2_idt, c2_detach) +
-                self._weight_criterion(s1_idt, s1_detach) + self._weight_criterion(s2_idt, s2_detach)) / 4.
+        loss_weight_cycle: Tensor = lambda_weight_cycle * (
+                self._weight_cycle_criterion(c1_idt, c1_detach) + self._weight_cycle_criterion(c2_idt, c2_detach) +
+                self._weight_cycle_criterion(s1_idt, s1_detach) + self._weight_cycle_criterion(s2_idt, s2_detach)) / 4.
 
         # 3. Content Disc Loss
         b1_content: Tensor = output['b1_content']
@@ -268,10 +286,11 @@ class SCSeparatorModel(BaseModel):
         norm_s1: Tensor = torch.sqrt((s1 * s1).flatten(start_dim=1).mean(dim=1)).mean()
         norm_s2: Tensor = torch.sqrt((s2 * s2).flatten(start_dim=1).mean(dim=1)).mean()
 
-        loss: Tensor = loss_idt + loss_cycle + loss_content + loss_style + loss_siamese
+        loss: Tensor = loss_idt + loss_latent_idt + loss_weight_cycle + loss_content + loss_style + loss_siamese
 
         loss_dict: Dict[str, Tensor] = {'loss': loss,
-                                        'loss_idt': loss_idt, 'loss_cycle': loss_cycle,
+                                        'loss_identity': loss_idt, 'loss_latent_identity': loss_latent_idt,
+                                        'loss_weight_cycle': loss_weight_cycle,
                                         'loss_content': loss_content, 'accuracy_content': accuracy_content,
                                         'loss_style': loss_style, 'accuracy_style': accuracy_style,
                                         'loss_siamese': loss_siamese,
@@ -433,14 +452,17 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
 
         # Source Disc Loss
         xp1: Tensor = output['xp1']
-        xp2: Tensor = output['xp2']
+        xp21: Tensor = self._decoder(c2 + s1)
+        xp20: Tensor = self._decoder(c2)
         b1_source: Tensor = self._source_disc(xp1.detach())
-        b2_source: Tensor = self._source_disc(grad_reverse(self._decoder(c2 + s1), gamma=gamma_source))
-        b2_source2: Tensor = self._source_disc(grad_reverse(self._decoder(c2), gamma=gamma_source))
+        b2_source: Tensor = self._source_disc(grad_reverse(xp21, gamma=gamma_source))
+        b2_source2: Tensor = self._source_disc(grad_reverse(xp20, gamma=gamma_source))
 
         # Reference Disc Loss
+        xp2: Tensor = output['xp2']
+        xp12: Tensor = self._decoder(c1 + s2)
         b1_reference: Tensor = self._source_disc(xp2.detach())
-        b2_reference: Tensor = self._source_disc(grad_reverse(self._decoder(c1 + s2), gamma=gamma_reference))
+        b2_reference: Tensor = self._source_disc(grad_reverse(xp12, gamma=gamma_reference))
 
         # Content Segmentation Disc Loss
         b1_content_seg: Tensor = self._content_seg_disc(grad_scale(c1, gamma=gamma_content_seg))
@@ -516,7 +538,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         accuracy_style_seg: Tensor = (correct1.sum() + correct2.sum()) / float(torch.numel(correct1) +
                                                                                torch.numel(correct2))
 
-        loss: Tensor = loss_dict['loss'] + loss_source + loss_reference + loss_content_seg + loss_style_seg
+        loss: Tensor = (loss_dict['loss'] +
+                        loss_source + loss_reference + loss_content_seg + loss_style_seg)
 
         loss_dict.update({'loss': loss,
                           'loss_source': loss_source, 'accuracy_source': accuracy_source,
