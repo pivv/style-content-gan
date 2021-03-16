@@ -358,7 +358,6 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
 
         self._source_disc: nn.Module = nn.Sequential(
-            Permute((0, 3, 1, 2)),
             spectral_norm(nn.Conv2d(in_channels, 128, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(128, 64, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
@@ -367,7 +366,6 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
             spectral_norm(nn.Conv2d(32, 16, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             nn.Flatten(), nn.Linear(4*4*16, 1))
         self._reference_disc: nn.Module = nn.Sequential(
-            Permute((0, 3, 1, 2)),
             spectral_norm(nn.Conv2d(in_channels, 128, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(128, 128, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
             spectral_norm(nn.Conv2d(128, 64, kernel_size=3, stride=2, padding=1, bias=False)), nn.LeakyReLU(0.01),
@@ -433,7 +431,6 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         # Source Disc Loss
         xp1: Tensor = output['xp1']
         xp2: Tensor = output['xp2']
-        print(xp1.size(), xp2.size())
         b1_source: Tensor = self._source_disc(xp1.detach())
         b2_source: Tensor = self._source_disc(grad_reverse(self._decoder(c2 + s1), gamma=gamma_source))
 
