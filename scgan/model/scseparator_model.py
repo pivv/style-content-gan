@@ -170,9 +170,9 @@ class SCSeparatorModel(BaseModel):
         z2, s2, c2 = self._style_content_separate(xp2)
 
         # Identity Loss
-        #xp1_idt: Tensor = self._decoder(z1)
-        xp1_idt: Tensor = self._decoder(c1)
-        #xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
+        xp1_idt: Tensor = self._decoder(z1)
+        #xp1_idt: Tensor = self._decoder(c1)
+        xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
         xp2_idt: Tensor = self._decoder(z2)
 
         # Latent Identity Loss
@@ -183,8 +183,8 @@ class SCSeparatorModel(BaseModel):
         s2_detach: Tensor = self._style_w(z2_detach)
         c2_detach: Tensor = z2_detach - s2_detach
 
-        #z1_idt: Tensor = self._encoder(self._decoder(z1_detach))  # Latent
-        z1_idt: Tensor = self._encoder(self._decoder(c1_detach.detach()))  # Latent
+        z1_idt: Tensor = self._encoder(self._decoder(z1_detach))  # Latent
+        #z1_idt: Tensor = self._encoder(self._decoder(c1_detach.detach()))  # Latent
         z2_idt: Tensor = self._encoder(self._decoder(z2_detach))  # Latent
 
         # Weight Cycle Loss
@@ -207,7 +207,7 @@ class SCSeparatorModel(BaseModel):
 
         output: Dict[str, Tensor] = {'xp1': xp1, 'xp2': xp2,
                                      'z1': z1, 'z2': z2, 's1': s1, 's2': s2, 'c1': c1, 'c2': c2,
-                                     'xp1_idt': xp1_idt, 'xp2_idt': xp2_idt, #'xp1_idt2': xp1_idt2,
+                                     'xp1_idt': xp1_idt, 'xp2_idt': xp2_idt, 'xp1_idt2': xp1_idt2,
                                      'z1_detach': z1_detach, 'z2_detach': z2_detach, 'z1_idt': z1_idt, 'z2_idt': z2_idt,
                                      'c1_detach': c1_detach, 'c2_detach': c2_detach,
                                      's1_detach': s1_detach, 's2_detach': s2_detach,
@@ -230,14 +230,14 @@ class SCSeparatorModel(BaseModel):
         xp1: Tensor = output['xp1']
         xp2: Tensor = output['xp2']
         xp1_idt: Tensor = output['xp1_idt']
-        #xp1_idt2: Tensor = output['xp1_idt2']
+        xp1_idt2: Tensor = output['xp1_idt2']
         xp2_idt: Tensor = output['xp2_idt']
         assert(xp1[:, :3].size() == xp1_idt.size() and xp2[:, :3].size() == xp2_idt.size())
-        loss_idt: Tensor = lambda_idt * (
-                self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
         #loss_idt: Tensor = lambda_idt * (
-        #        (self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp1_idt2, xp1[:, :3])) / 2. +
-        #        self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
+        #        self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
+        loss_idt: Tensor = lambda_idt * (
+                (self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp1_idt2, xp1[:, :3])) / 2. +
+                self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
 
         # 2. Latent Identity Loss
         z1_detach: Tensor = output['z1_detach']
@@ -455,23 +455,22 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
 
         # Source Disc Loss
         xp1: Tensor = output['xp1']
-        xp1_idt: Tensor = output['xp1_idt']
-        #xp21: Tensor = self._decoder(c2 + s1)
-        xp21: Tensor = self._decoder(c2)
-        #xp20: Tensor = self._decoder(c2)
-        b1_source: Tensor = self._source_disc(xp1_idt.detach())
+        #xp1_idt: Tensor = output['xp1_idt']
+        xp21: Tensor = self._decoder(c2 + s1)
+        #xp21: Tensor = self._decoder(c2)
+        xp20: Tensor = self._decoder(c2)
+        b1_source: Tensor = self._source_disc(xp1.detach())
         #b1_source2: Tensor = self._source_disc(xp1_idt.detach())
         b2_source: Tensor = self._source_disc(grad_reverse(xp21, gamma=gamma_source))
-        #b2_source2: Tensor = self._source_disc(grad_reverse(xp20, gamma=gamma_source))
+        b2_source2: Tensor = self._source_disc(grad_reverse(xp20, gamma=gamma_source))
 
         # Reference Disc Loss
         xp2: Tensor = output['xp2']
-        xp2_idt: Tensor = output['xp2_idt']
+        #xp2_idt: Tensor = output['xp2_idt']
         xp12: Tensor = self._decoder(c1 + s2)
-        b1_reference: Tensor = self._reference_disc(xp2_idt.detach())
+        b1_reference: Tensor = self._reference_disc(xp2.detach())
         #b1_reference2: Tensor = self._reference_disc(xp2_idt.detach())
         b2_reference: Tensor = self._reference_disc(grad_reverse(xp12, gamma=gamma_reference))
-        #b2_reference2: Tensor = self._reference_disc(grad_reverse(xp2_idt, gamma=gamma_reference))
 
         # Content Segmentation Disc Loss
         b1_content_seg: Tensor = self._content_seg_disc(grad_scale(c1, gamma=gamma_content_seg))
@@ -481,7 +480,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_style_seg: Tensor = self._style_seg_disc(grad_reverse(s1, gamma=gamma_style_seg))
         b2_style_seg: Tensor = self._style_seg_disc(grad_reverse(s2, gamma=gamma_style_seg))
 
-        output.update({'b1_source': b1_source, 'b2_source': b2_source, #'b1_source2': b1_source2, 'b2_source2': b2_source2,
+        output.update({'b1_source': b1_source, 'b2_source': b2_source, 'b2_source2': b2_source2, #'b1_source2': b1_source2,
                        'b1_reference': b1_reference, 'b2_reference': b2_reference, #'b1_reference2': b1_reference2,
                        'b1_content_seg': b1_content_seg, 'b2_content_seg': b2_content_seg,
                        'b1_style_seg': b1_style_seg, 'b2_style_seg': b2_style_seg})
@@ -501,16 +500,21 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_source: Tensor = output['b1_source']
         #b1_source2: Tensor = output['b1_source2']
         b2_source: Tensor = output['b2_source']
-        #b2_source3: Tensor = output['b2_source3']
+        b2_source2: Tensor = output['b2_source2']
+        #loss_source: Tensor = lambda_source * (
+        #        self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
+        #        self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
         loss_source: Tensor = lambda_source * (
                 self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
-                self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
+                (self._source_criterion(b2_source, torch.ones_like(b2_source)) +
+                 self._source_criterion(b2_source2, torch.ones_like(b2_source2))) / 2.) / 2.
         correct1: Tensor = b1_source < 0
         #correct12: Tensor = b1_source2 >= 0
         correct2: Tensor = b2_source >= 0
-        accuracy_source: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_source) + len(b2_source))
-        #accuracy_source: Tensor = ((correct1.sum() + correct12.sum()) / 2. + correct2.sum()
-        #                           ) / float(len(b1_source) + len(b2_source))
+        correct22: Tensor = b2_source2 >= 0
+        #accuracy_source: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_source) + len(b2_source))
+        accuracy_source: Tensor = (correct1.sum() + (correct2.sum() + correct22.sum()) / 2.
+                                   ) / float(len(b1_source) + len(b2_source))
 
         # 2. Reference Disc Loss
         b1_reference: Tensor = output['b1_reference']
