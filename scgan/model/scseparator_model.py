@@ -459,7 +459,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         #xp21: Tensor = self._decoder(c2 + s1)
         xp21: Tensor = self._decoder(c2)
         #xp20: Tensor = self._decoder(c2)
-        b1_source: Tensor = self._source_disc(xp1.detach())
+        b1_source: Tensor = self._source_disc(xp1_idt.detach())
         #b1_source2: Tensor = self._source_disc(xp1_idt.detach())
         b2_source: Tensor = self._source_disc(grad_reverse(xp21, gamma=gamma_source))
         #b2_source2: Tensor = self._source_disc(grad_reverse(xp20, gamma=gamma_source))
@@ -468,7 +468,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         xp2: Tensor = output['xp2']
         xp2_idt: Tensor = output['xp2_idt']
         xp12: Tensor = self._decoder(c1 + s2)
-        b1_reference: Tensor = self._reference_disc(xp2.detach())
+        b1_reference: Tensor = self._reference_disc(xp2_idt.detach())
         #b1_reference2: Tensor = self._reference_disc(xp2_idt.detach())
         b2_reference: Tensor = self._reference_disc(grad_reverse(xp12, gamma=gamma_reference))
         #b2_reference2: Tensor = self._reference_disc(grad_reverse(xp2_idt, gamma=gamma_reference))
