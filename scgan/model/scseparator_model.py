@@ -169,7 +169,8 @@ class SCSeparatorModel(BaseModel):
         z2, s2, c2 = self._style_content_separate(xp2)
 
         # Identity Loss
-        xp1_idt: Tensor = self._decoder(z1)
+        #xp1_idt: Tensor = self._decoder(z1)
+        xp1_idt: Tensor = self._decoder(c1)
         #xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
         xp2_idt: Tensor = self._decoder(z2)
 
@@ -435,7 +436,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         xp1: Tensor = output['xp1']
         xp2: Tensor = output['xp2']
         b1_source: Tensor = self._source_disc(xp1.detach())
-        b2_source: Tensor = self._source_disc(grad_reverse(self._decoder(c2 + s1), gamma=gamma_source))
+        b2_source: Tensor = self._source_disc(grad_reverse(self._decoder(c2), gamma=gamma_source))
+        #b2_source: Tensor = self._source_disc(grad_reverse(self._decoder(c2 + s1), gamma=gamma_source))
 
         # Reference Disc Loss
         b1_reference: Tensor = self._source_disc(xp2.detach())
