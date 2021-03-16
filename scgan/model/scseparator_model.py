@@ -170,8 +170,7 @@ class SCSeparatorModel(BaseModel):
 
         # Identity Loss
         xp1_idt: Tensor = self._decoder(z1)
-        #xp1_idt: Tensor = self._decoder(c1)
-        xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
+        #xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
         xp2_idt: Tensor = self._decoder(z2)
 
         # Weight Cycle Loss
@@ -198,7 +197,7 @@ class SCSeparatorModel(BaseModel):
 
         output: Dict[str, Tensor] = {'xp1': xp1, 'xp2': xp2,
                                      'z1': z1, 'z2': z2, 's1': s1, 's2': s2, 'c1': c1, 'c2': c2,
-                                     'xp1_idt': xp1_idt, 'xp2_idt': xp2_idt, 'xp1_idt2': xp1_idt2,
+                                     'xp1_idt': xp1_idt, 'xp2_idt': xp2_idt, #'xp1_idt2': xp1_idt2,
                                      'c1_detach': c1_detach, 'c2_detach': c2_detach,
                                      's1_detach': s1_detach, 's2_detach': s2_detach,
                                      'c1_idt': c1_idt, 'c2_idt': c2_idt, 's1_idt': s1_idt, 's2_idt': s2_idt,
@@ -219,14 +218,14 @@ class SCSeparatorModel(BaseModel):
         xp1: Tensor = output['xp1']
         xp2: Tensor = output['xp2']
         xp1_idt: Tensor = output['xp1_idt']
-        xp1_idt2: Tensor = output['xp1_idt2']
+        #xp1_idt2: Tensor = output['xp1_idt2']
         xp2_idt: Tensor = output['xp2_idt']
         assert(xp1[:, :3].size() == xp1_idt.size() and xp2[:, :3].size() == xp2_idt.size())
-        #loss_idt: Tensor = lambda_idt * (
-        #        self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
         loss_idt: Tensor = lambda_idt * (
-                (self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp1_idt2, xp1[:, :3])) / 2. +
-                self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
+                self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
+        #loss_idt: Tensor = lambda_idt * (
+        #        (self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp1_idt2, xp1[:, :3])) / 2. +
+        #        self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
 
         # 2. Weight Cycle Loss
         c1_detach: Tensor = output['c1_detach']
