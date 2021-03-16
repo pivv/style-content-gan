@@ -453,10 +453,10 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         # Source Disc Loss
         xp1: Tensor = output['xp1']
         xp21: Tensor = self._decoder(c2 + s1)
-        xp20: Tensor = self._decoder(c2)
+        #xp20: Tensor = self._decoder(c2)
         b1_source: Tensor = self._source_disc(xp1.detach())
         b2_source: Tensor = self._source_disc(grad_reverse(xp21, gamma=gamma_source))
-        b2_source2: Tensor = self._source_disc(grad_reverse(xp20, gamma=gamma_source))
+        #b2_source2: Tensor = self._source_disc(grad_reverse(xp20, gamma=gamma_source))
 
         # Reference Disc Loss
         xp2: Tensor = output['xp2']
@@ -472,7 +472,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_style_seg: Tensor = self._style_seg_disc(grad_reverse(s1, gamma=gamma_style_seg))
         b2_style_seg: Tensor = self._style_seg_disc(grad_reverse(s2, gamma=gamma_style_seg))
 
-        output.update({'b1_source': b1_source, 'b2_source': b2_source, 'b2_source2': b2_source2,
+        output.update({'b1_source': b1_source, 'b2_source': b2_source, #'b2_source2': b2_source2,
                        'b1_reference': b1_reference, 'b2_reference': b2_reference,
                        'b1_content_seg': b1_content_seg, 'b2_content_seg': b2_content_seg,
                        'b1_style_seg': b1_style_seg, 'b2_style_seg': b2_style_seg})
@@ -491,16 +491,20 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         # 1. Source Disc Loss
         b1_source: Tensor = output['b1_source']
         b2_source: Tensor = output['b2_source']
-        b2_source2: Tensor = output['b2_source2']
+        #b2_source2: Tensor = output['b2_source2']
         loss_source: Tensor = lambda_source * (
                 self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
-                (self._source_criterion(b2_source, torch.ones_like(b2_source)) +
-                 self._source_criterion(b2_source2, torch.ones_like(b2_source2))) / 2.) / 2.
+                self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
+        #loss_source: Tensor = lambda_source * (
+        #        self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
+        #        (self._source_criterion(b2_source, torch.ones_like(b2_source)) +
+        #         self._source_criterion(b2_source2, torch.ones_like(b2_source2))) / 2.) / 2.
         correct1: Tensor = b1_source < 0
         correct2: Tensor = b2_source >= 0
-        correct22: Tensor = b2_source2 >= 0
-        accuracy_source: Tensor = (correct1.sum() + (correct2.sum() + correct22.sum()) / 2.
-                                   ) / float(len(b1_source) + len(b2_source))
+        #correct22: Tensor = b2_source2 >= 0
+        accuracy_source: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_source) + len(b2_source))
+        #accuracy_source: Tensor = (correct1.sum() + (correct2.sum() + correct22.sum()) / 2.
+        #                           ) / float(len(b1_source) + len(b2_source))
 
         # 2. Reference Disc Loss
         b1_reference: Tensor = output['b1_reference']
