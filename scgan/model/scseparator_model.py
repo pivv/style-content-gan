@@ -465,6 +465,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         # 1. Source Disc Loss
         b1_source: Tensor = output['b1_source']
         b2_source: Tensor = output['b2_source']
+        print(b1_source)
+        print(b2_source)
         loss_source: Tensor = lambda_source * (
                 self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
                 self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
