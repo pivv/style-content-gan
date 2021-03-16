@@ -433,6 +433,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         # Source Disc Loss
         xp1: Tensor = output['xp1']
         xp2: Tensor = output['xp2']
+        print(xp1.size(), xp2.size())
         b1_source: Tensor = self._source_disc(xp1.detach())
         b2_source: Tensor = self._source_disc(grad_reverse(self._decoder(c2 + s1), gamma=gamma_source))
 
