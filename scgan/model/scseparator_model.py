@@ -407,12 +407,15 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
     def _set_optimizers(self, params: Dict[str, Any]) -> None:
         super()._set_optimizers(params)
         weight_decay: float = params['weight_decay']
+        optimizer_source = optim.Adam(self._source_disc.parameters(), params['learning_rate'], weight_decay=weight_decay)
+        optimizer_reference = optim.Adam(self._reference_disc.parameters(), params['learning_rate'], weight_decay=weight_decay)
         optimizer_content_seg = optim.Adam(self._content_seg_disc.parameters(), params['learning_rate'], weight_decay=weight_decay)
         optimizer_style_seg = optim.Adam(self._style_seg_disc.parameters(), params['learning_rate'], weight_decay=weight_decay)
 
-        self._optimizers += [optimizer_content_seg, optimizer_style_seg]
+        self._optimizers += [optimizer_source, optimizer_reference, optimizer_content_seg, optimizer_style_seg]
         self._schedulers += [optim.lr_scheduler.ExponentialLR(optimizer, gamma=params['scheduler_gamma']) for
-                             optimizer in [optimizer_content_seg, optimizer_style_seg]]
+                             optimizer in [optimizer_source, optimizer_reference,
+                                           optimizer_content_seg, optimizer_style_seg]]
 
     def forward(self, batch: Dict[str, Tensor], params: Dict[str, Any],
                 global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
@@ -436,7 +439,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
 
         # Reference Disc Loss
         b1_reference: Tensor = self._source_disc(xp2.detach())
-        b2_reference: Tensor = self._source_disc(grad_reverse(self._decoder(c1 + s2), gamma=gamma_source))
+        b2_reference: Tensor = self._source_disc(grad_reverse(self._decoder(c1 + s2), gamma=gamma_reference))
 
         # Content Segmentation Disc Loss
         b1_content_seg: Tensor = self._content_seg_disc(grad_scale(c1, gamma=gamma_content_seg))
@@ -465,8 +468,6 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         # 1. Source Disc Loss
         b1_source: Tensor = output['b1_source']
         b2_source: Tensor = output['b2_source']
-        print(b1_source)
-        print(b2_source)
         loss_source: Tensor = lambda_source * (
                 self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
                 self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
