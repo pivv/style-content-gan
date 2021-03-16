@@ -220,11 +220,11 @@ class SCSeparatorModel(BaseModel):
         xp1_idt2: Tensor = output['xp1_idt2']
         xp2_idt: Tensor = output['xp2_idt']
         assert(xp1[:, :3].size() == xp1_idt.size() and xp2[:, :3].size() == xp2_idt.size())
-        #loss_idt: Tensor = lambda_idt * (
-        #        self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
         loss_idt: Tensor = lambda_idt * (
-                self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp1_idt2, xp1[:, :3]) +
-                self._identity_criterion(xp2_idt, xp2[:, :3])) / 3.
+                self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
+        #loss_idt: Tensor = lambda_idt * (
+        #        self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp1_idt2, xp1[:, :3]) +
+        #        self._identity_criterion(xp2_idt, xp2[:, :3])) / 3.
 
         # 2. Weight Cycle Loss
         c1_detach: Tensor = output['c1_detach']
