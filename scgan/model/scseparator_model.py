@@ -250,9 +250,10 @@ class SCSeparatorModel(BaseModel):
         # 3. Content Disc Loss
         b1_content: Tensor = output['b1_content']
         b2_content: Tensor = output['b2_content']
-        loss_content: Tensor = lambda_content * (
-                self._content_criterion(b1_content, torch.zeros_like(b1_content)) +
-                self._content_criterion(b2_content, torch.ones_like(b2_content))) / 2.
+        loss_content: Tensor = lambda_content * (b1_content.mean() - b2_content.mean()) / 2.
+        #loss_content: Tensor = lambda_content * (
+        #        self._content_criterion(b1_content, torch.zeros_like(b1_content)) +
+        #        self._content_criterion(b2_content, torch.ones_like(b2_content))) / 2.
         correct1: Tensor = b1_content < 0
         correct2: Tensor = b2_content >= 0
         accuracy_content: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_content) + len(b2_content))
@@ -260,6 +261,7 @@ class SCSeparatorModel(BaseModel):
         # 4. Style Disc Loss
         b1_style: Tensor = output['b1_style']
         b2_style: Tensor = output['b2_style']
+        #loss_style: Tensor = lambda_style * (b1_style.mean() - b2_style.mean()) / 2.
         loss_style: Tensor = lambda_style * (
                 self._style_criterion(b1_style, torch.zeros_like(b1_style)) +
                 self._style_criterion(b2_style, torch.ones_like(b2_style))) / 2.
@@ -506,9 +508,10 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         #b1_source2: Tensor = output['b1_source2']
         b2_source: Tensor = output['b2_source']
         #b2_source2: Tensor = output['b2_source2']
-        loss_source: Tensor = lambda_source * (
-                self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
-                self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
+        loss_source: Tensor = lambda_source * (b1_source.mean() - b2_source.mean()) / 2.
+        #loss_source: Tensor = lambda_source * (
+        #        self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
+        #        self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
         #loss_source: Tensor = lambda_source * (
         #        self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
         #        (self._source_criterion(b2_source, torch.ones_like(b2_source)) +
@@ -525,9 +528,10 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_reference: Tensor = output['b1_reference']
         #b1_reference2: Tensor = output['b1_reference2']
         b2_reference: Tensor = output['b2_reference']
-        loss_reference: Tensor = lambda_reference * (
-                self._reference_criterion(b1_reference, torch.zeros_like(b1_reference)) +
-                self._reference_criterion(b2_reference, torch.ones_like(b2_reference))) / 2.
+        loss_reference: Tensor = lambda_reference * (b1_reference.mean() - b2_reference.mean()) / 2.
+        #loss_reference: Tensor = lambda_reference * (
+        #        self._reference_criterion(b1_reference, torch.zeros_like(b1_reference)) +
+        #        self._reference_criterion(b2_reference, torch.ones_like(b2_reference))) / 2.
         correct1: Tensor = b1_reference < 0
         #correct12: Tensor = b1_reference2 >= 0
         correct2: Tensor = b2_reference >= 0
@@ -541,8 +545,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_content_seg: Tensor = output['b1_content_seg']
         b2_content_seg: Tensor = output['b2_content_seg']
         loss_content_seg: Tensor = lambda_content_seg * (
-                self._content_seg_criterion(b1_content_seg, seg1) +
-                self._content_seg_criterion(b2_content_seg, seg2)) / 2.
+                self._content_seg_criterion(b1_content_seg, seg1) + self._content_seg_criterion(b2_content_seg, seg2)) / 2.
         correct1: Tensor = b1_content_seg.argmax(dim=1) == seg1
         correct2: Tensor = b2_content_seg.argmax(dim=1) == seg2
         accuracy_content_seg: Tensor = (correct1.sum() + correct2.sum()) / float(torch.numel(correct1) +
@@ -553,9 +556,9 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         seg2: Tensor = batch['seg2']
         b1_style_seg: Tensor = output['b1_style_seg']
         b2_style_seg: Tensor = output['b2_style_seg']
-        loss_style_seg: Tensor = lambda_style_seg * (
-                self._style_seg_criterion(b1_style_seg, seg1) +
-                self._style_seg_criterion(b2_style_seg, seg2)) / 2.
+        loss_style_seg: Tensor = lambda_style_seg * (b1_style_seg.mean() - b2_style_seg.mean()) / 2.
+        #loss_style_seg: Tensor = lambda_style_seg * (
+        #        self._style_seg_criterion(b1_style_seg, seg1) + self._style_seg_criterion(b2_style_seg, seg2)) / 2.
         correct1: Tensor = b1_style_seg.argmax(dim=1) == seg1
         correct2: Tensor = b2_style_seg.argmax(dim=1) == seg2
         accuracy_style_seg: Tensor = (correct1.sum() + correct2.sum()) / float(torch.numel(correct1) +
