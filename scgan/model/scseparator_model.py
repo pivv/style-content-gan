@@ -105,14 +105,17 @@ class SCSeparatorModel(BaseModel):
     def _predict(self, batch: Dict[str, Tensor], **kwargs) -> Dict[str, Tensor]:
         if 'x' in batch.keys():  # Style-content separate
             xp: Tensor = self._scaler.scaling(batch['x'])
-            z, s, c = self._style_content_separate(xp)
+            z: Tensor = self._encoder(xp)
+            s, c = self._style_content_separate(z)
             output: Dict[str, Tensor] = {'z': z, 's': s, 'c': c}
         else:
             assert('x1' in batch.keys() and 'x2' in batch.keys())  # Style change
             xp1: Tensor = self._scaler.scaling(batch['x1'])
             xp2: Tensor = self._scaler.scaling(batch['x2'])
-            z1, s1, c1 = self._style_content_separate(xp1)
-            z2, s2, c2 = self._style_content_separate(xp2)
+            z1: Tensor = self._encoder(xp1)
+            z2: Tensor = self._encoder(xp2)
+            s1, c1 = self._style_content_separate(z1)
+            s2, c2 = self._style_content_separate(z2)
             x1_idt: Tensor = self._scaler.unscaling(self._decoder(c1 + s1))
             x1_idt2: Tensor = self._scaler.unscaling(self._decoder(c1))
             x2_idt: Tensor = self._scaler.unscaling(self._decoder(c2 + s2))
@@ -124,12 +127,11 @@ class SCSeparatorModel(BaseModel):
                                          'x2_idt': x2_idt, 'x12': x12, 'x21': x21, 'x21_2': x21_2}
         return output
 
-    def _style_content_separate(self, xp: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-        z: Tensor = self._encoder(xp)  # Latent
+    def _style_content_separate(self, z: Tensor) -> Tuple[Tensor, Tensor]:
         s: Tensor = self._style_w(z)  # Style
         assert(s.size() == z.size())
         c: Tensor = z - s  # Content
-        return z, s, c
+        return s, c
 
     def _post_processing(self, batch: Dict[str, Tensor], params: Dict[str, Any],
                          global_step: int = 0) -> None:
@@ -166,8 +168,10 @@ class SCSeparatorModel(BaseModel):
 
         xp1: Tensor = self._scaler.scaling(batch['x1'])
         xp2: Tensor = self._scaler.scaling(batch['x2'])
-        z1, s1, c1 = self._style_content_separate(xp1)
-        z2, s2, c2 = self._style_content_separate(xp2)
+        z1: Tensor = self._encoder(xp1)
+        z2: Tensor = self._encoder(xp2)
+        s1, c1 = self._style_content_separate(z1)
+        s2, c2 = self._style_content_separate(z2)
 
         # Identity Loss
         xp1_idt: Tensor = self._decoder(z1)
@@ -178,24 +182,24 @@ class SCSeparatorModel(BaseModel):
         # Latent Identity Loss
         z1_detach: Tensor = z1.detach()
         z2_detach: Tensor = z2.detach()
-        s1_detach: Tensor = self._style_w(z1_detach)
-        c1_detach: Tensor = z1_detach - s1_detach
-        s2_detach: Tensor = self._style_w(z2_detach)
-        c2_detach: Tensor = z2_detach - s2_detach
+        s1_detach, c1_detach = self._style_content_separate(z1_detach)
+        s2_detach, c2_detach = self._style_content_separate(z2_detach)
 
-        z1_idt: Tensor = self._encoder(self._decoder(z1_detach))  # Latent
+        s1_cycle, c1_cycle = self._style_content_separate(
+            self._encoder(self._decoder(s2_detach.detach() + c1_detach.detach())))
+        z1_idt: Tensor = c1_cycle
+        s2_cycle, c2_cycle = self._style_content_separate(
+            self._encoder(self._decoder(c2_detach.detach())))
         #z1_idt: Tensor = self._encoder(self._decoder(c1_detach.detach()))  # Latent
-        z2_idt: Tensor = self._encoder(self._decoder(z2_detach))  # Latent
+        z2_idt: Tensor = s2_detach.detach() + c2_cycle
 
         # Weight Cycle Loss
         z12: Tensor = (c1_detach + s2_detach)
         #z12: Tensor = (c1 + s2)
-        s2_idt: Tensor = self._style_w(z12)
-        c1_idt: Tensor = z12 - s2_idt
+        s2_idt, c1_idt = self._style_content_separate(z12)
         z21: Tensor = (c2_detach + s1_detach)
         #z21: Tensor = (c2 + s1)
-        s1_idt: Tensor = self._style_w(z21)
-        c2_idt: Tensor = z21 - s1_idt
+        s1_idt, c2_idt = self._style_content_separate(z21)
 
         # Content Disc Loss
         b1_content: Tensor = self._content_disc(c1.detach())
