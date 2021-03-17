@@ -49,30 +49,22 @@ class SCSeparatorModel(BaseModel):
         self._scaler = scaler
 
         self._identity_criterion = nn.MSELoss()
-        self._latent_identity_criterion = nn.MSELoss()
+        self._cycle_criterion = nn.MSELoss()
         self._weight_cycle_criterion = nn.MSELoss()
         self._content_criterion = nn.BCEWithLogitsLoss()
         self._style_criterion = nn.BCEWithLogitsLoss()
-        #self._siamese_criterion = SiameseLoss()
+        self._siamese_criterion = SiameseLoss()
 
         self.to(self._device)
 
     def _update_optimizers(self, loss_dict: Dict[str, Tensor], params: Dict[str, Any],
                            global_step: int = 0) -> None:
-        #(optimizer_enc, optimizer_dec, optimizer_w, optimizer_content, optimizer_style) = self._optimizers
-
         loss: Tensor = loss_dict['loss']
-        #loss_idt: Tensor = loss_dict['loss_idt']
-        #loss_weight_cycle: Tensor = loss_dict['loss_weight_cycle']
-        #loss_content: Tensor = loss_dict['loss_content']
-        #loss_style: Tensor = loss_dict['loss_style']
-        #loss_siamese: Tensor = loss_dict['loss_siamese']
 
         for optimizer in self._optimizers:
             optimizer.zero_grad()
 
         loss.backward()
-        #(loss_idt + loss_weight_cycle + loss_content + loss_style + loss_siamese).backward(retain_graph=True)
         if 'clip_size' in params:
             clip_grad_norm_(self.parameters(), params['clip_size'])
 
@@ -174,34 +166,26 @@ class SCSeparatorModel(BaseModel):
         s2, c2 = self._style_content_separate(z2)
 
         # Identity Loss
-        #xp1_idt: Tensor = self._decoder(z1)
-        xp1_idt: Tensor = self._decoder(c1)
+        xp1_idt: Tensor = self._decoder(z1)
+        #xp1_idt: Tensor = self._decoder(c1)
         #xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
         xp2_idt: Tensor = self._decoder(z2)
 
-        # Latent Identity Loss
-        z1_detach: Tensor = z1.detach()
-        z2_detach: Tensor = z2.detach()
-        s1_detach, c1_detach = self._style_content_separate(z1_detach)
-        s2_detach, c2_detach = self._style_content_separate(z2_detach)
-
-        s1_cycle, c1_cycle = self._style_content_separate(
-            self._encoder(self._decoder(s2_detach.detach() + c1_detach.detach())))
-        #z1_idt: Tensor = s1_detach.detach() + c1_cycle
-        z1_idt: Tensor = c1_cycle
-        #s2_cycle, c2_cycle = self._style_content_separate(
-        #    self._encoder(self._decoder(s1_detach.detach() + c2_detach.detach())))
-        s2_cycle, c2_cycle = self._style_content_separate(
-            self._encoder(self._decoder(c2_detach.detach())))
-        z2_idt: Tensor = s2_detach.detach() + c2_cycle
+        # Cycle Loss
+        xp12: Tensor = self._decoder(c1 + s2)
+        xp21: Tensor = self._decoder(c2 + s1)
+        #xp21: Tensor = self._decoder(c2)
+        s12, c12 = self._style_content_separate(self._encoder(xp12))
+        s21, c21 = self._style_content_separate(self._encoder(xp21))
+        xp1_cycle: Tensor = self._decoder(c12 + s1)
+        #xp1_cycle: Tensor = self._decoder(c12)
+        xp2_cycle: Tensor = self._decoder(c21 + s2)
 
         # Weight Cycle Loss
-        z12: Tensor = (c1_detach + s2_detach)
-        #z12: Tensor = (c1 + s2)
-        s2_idt, c1_idt = self._style_content_separate(z12)
-        z21: Tensor = (c2_detach + s1_detach)
-        #z21: Tensor = (c2 + s1)
-        s1_idt, c2_idt = self._style_content_separate(z21)
+        s1_detach, c1_detach = self._style_content_separate(z1.detach())
+        s2_detach, c2_detach = self._style_content_separate(z2.detach())
+        s2_idt, c1_idt = self._style_content_separate(c1_detach + s2_detach)
+        s1_idt, c2_idt = self._style_content_separate(c2_detach + s1_detach)
 
         # Content Disc Loss
         b1_content: Tensor = self._content_disc(c1.detach())
@@ -214,9 +198,8 @@ class SCSeparatorModel(BaseModel):
         output: Dict[str, Tensor] = {'xp1': xp1, 'xp2': xp2,
                                      'z1': z1, 'z2': z2, 's1': s1, 's2': s2, 'c1': c1, 'c2': c2,
                                      'xp1_idt': xp1_idt, 'xp2_idt': xp2_idt, #'xp1_idt2': xp1_idt2,
-                                     'z1_detach': z1_detach, 'z2_detach': z2_detach, 'z1_idt': z1_idt, 'z2_idt': z2_idt,
-                                     'c1_detach': c1_detach, 'c2_detach': c2_detach,
-                                     's1_detach': s1_detach, 's2_detach': s2_detach,
+                                     'xp12': xp12, 'xp21': xp21, 'xp1_cycle': xp1_cycle, 'xp2_cycle': xp2_cycle,
+                                     'c1_detach': c1_detach, 'c2_detach': c2_detach, 's1_detach': s1_detach, 's2_detach': s2_detach,
                                      'c1_idt': c1_idt, 'c2_idt': c2_idt, 's1_idt': s1_idt, 's2_idt': s2_idt,
                                      'b1_content': b1_content, 'b2_content': b2_content,
                                      'b1_style': b1_style, 'b2_style': b2_style}
@@ -226,7 +209,7 @@ class SCSeparatorModel(BaseModel):
                       global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
         # 0. Parameters
         lambda_idt: float = params['lambda_identity']
-        lambda_latent_idt: float = params['lambda_latent_identity']
+        lambda_cycle: float = params['lambda_cycle']
         lambda_weight_cycle: float = params['lambda_weight_cycle']
         lambda_content: float = params['lambda_content']
         lambda_style: float = params['lambda_style']
@@ -245,14 +228,11 @@ class SCSeparatorModel(BaseModel):
         #        (self._identity_criterion(xp1_idt, xp1[:, :3]) + self._identity_criterion(xp1_idt2, xp1[:, :3])) / 2. +
         #        self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
 
-        # 2. Latent Identity Loss
-        z1_detach: Tensor = output['z1_detach']
-        z2_detach: Tensor = output['z2_detach']
-        z1_idt: Tensor = output['z1_idt']
-        z2_idt: Tensor = output['z2_idt']
-        loss_latent_idt: Tensor = lambda_latent_idt * (
-                self._latent_identity_criterion(z1_idt, z1_detach) +
-                self._latent_identity_criterion(z2_idt, z2_detach)) / 2.
+        # 2. Cycle Loss
+        xp1_cycle: Tensor = output['xp1_cycle']
+        xp2_cycle: Tensor = output['xp2_cycle']
+        loss_cycle: Tensor = lambda_cycle * (
+                self._cycle_criterion(xp1_cycle, xp1[:, :3]) + self._cycle_criterion(xp2_cycle, xp2[:, :3])) / 2.
 
         # 2. Weight Cycle Loss
         c1_detach: Tensor = output['c1_detach']
@@ -290,15 +270,15 @@ class SCSeparatorModel(BaseModel):
         # 5. Siamese Loss
         s1: Tensor = output['s1']
         s2: Tensor = output['s2']
-        loss_siamese: Tensor = lambda_siamese * (s1 * s1).mean()
-        #loss_siamese: Tensor = lambda_siamese * ((s1 * s1).mean() + self._siamese_criterion(s2, margin=0.5)) / 2.
+        #loss_siamese: Tensor = lambda_siamese * (s1 * s1).mean()
+        loss_siamese: Tensor = lambda_siamese * ((s1 * s1).mean() + self._siamese_criterion(s2, margin=1.)) / 2.
         norm_s1: Tensor = torch.sqrt((s1 * s1).flatten(start_dim=1).mean(dim=1)).mean()
         norm_s2: Tensor = torch.sqrt((s2 * s2).flatten(start_dim=1).mean(dim=1)).mean()
 
-        loss: Tensor = loss_idt + loss_latent_idt + loss_weight_cycle + loss_content + loss_style + loss_siamese
+        loss: Tensor = loss_idt + loss_cycle + loss_weight_cycle + loss_content + loss_style + loss_siamese
 
         loss_dict: Dict[str, Tensor] = {'loss': loss,
-                                        'loss_identity': loss_idt, 'loss_latent_identity': loss_latent_idt,
+                                        'loss_identity': loss_idt, 'loss_cycle': loss_cycle,
                                         'loss_weight_cycle': loss_weight_cycle,
                                         'loss_content': loss_content, 'accuracy_content': accuracy_content,
                                         'loss_style': loss_style, 'accuracy_style': accuracy_style,
@@ -317,19 +297,42 @@ class SCSeparatorMnistModel(SCSeparatorModel):
 
         encoder: nn.Module = nn.Sequential(
             nn.Conv2d(in_channels, planes[0], kernel_size=5, stride=1, padding=2, bias=False),
-            nn.BatchNorm2d(planes[0]), nn.LeakyReLU(0.01), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            nn.InstanceNorm2d(planes[0], affine=True), nn.LeakyReLU(0.01), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
             simple_resnet(dimension, num_blocks, planes,
-                          transpose=False, norm='BatchNorm', activation='LeakyReLU', pool=False),
+                          transpose=False, norm='InstanceNorm', activation='LeakyReLU', pool=False),
             nn.Flatten(start_dim=1), nn.Linear(planes[-1]*7*7, latent_dim))
         decoder: nn.Module = nn.Sequential(
             nn.Linear(latent_dim, planes[-1]*7*7), View((-1, planes[-1], 7, 7)),
             simple_resnet(dimension, num_blocks, planes,
-                          transpose=True, norm='BatchNorm', activation='LeakyReLU', pool=False),
+                          transpose=True, norm='InstanceNorm', activation='LeakyReLU', pool=False),
             nn.ConvTranspose2d(planes[0], planes[0], kernel_size=3, stride=2, padding=1, output_padding=1, bias=False),
-            nn.BatchNorm2d(planes[0]), nn.LeakyReLU(0.01),
+            nn.InstanceNorm2d(planes[0], affine=True), nn.LeakyReLU(0.01),
             nn.ConvTranspose2d(planes[0], in_channels, kernel_size=5, stride=1, padding=2, output_padding=0),
             nn.Tanh())
+        #encoder: nn.Module = nn.Sequential(
+        #    nn.Conv2d(in_channels, planes[0], kernel_size=5, stride=1, padding=2, bias=False),
+        #    nn.BatchNorm2d(planes[0]), nn.LeakyReLU(0.01), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+        #    simple_resnet(dimension, num_blocks, planes,
+        #                  transpose=False, norm='BatchNorm', activation='LeakyReLU', pool=False),
+        #    nn.Flatten(start_dim=1), nn.Linear(planes[-1]*7*7, latent_dim))
+        #decoder: nn.Module = nn.Sequential(
+        #    nn.Linear(latent_dim, planes[-1]*7*7), View((-1, planes[-1], 7, 7)),
+        #    simple_resnet(dimension, num_blocks, planes,
+        #                  transpose=True, norm='BatchNorm', activation='LeakyReLU', pool=False),
+        #    nn.ConvTranspose2d(planes[0], planes[0], kernel_size=3, stride=2, padding=1, output_padding=1, bias=False),
+        #    nn.BatchNorm2d(planes[0]), nn.LeakyReLU(0.01),
+        #    nn.ConvTranspose2d(planes[0], in_channels, kernel_size=5, stride=1, padding=2, output_padding=0),
+        #    nn.Tanh())
         style_w: nn.Module = nn.Linear(latent_dim, latent_dim, bias=False)
+        #content_disc: nn.Module = nn.Sequential(
+        #    spectral_norm(nn.Linear(latent_dim, 256, bias=False)), nn.LeakyReLU(0.01),
+        #    spectral_norm(nn.Linear(256, 64, bias=False)), nn.LeakyReLU(0.01),
+        #    nn.Linear(64, 1))
+        #style_disc: nn.Module = nn.Sequential(
+        #    #nn.Dropout(p=0.5, inplace=False),
+        #    spectral_norm(nn.Linear(latent_dim, 256, bias=False)), nn.LeakyReLU(0.01),
+        #    spectral_norm(nn.Linear(256, 64, bias=False)), nn.LeakyReLU(0.01),
+        #    nn.Linear(64, 1))
         content_disc: nn.Module = nn.Sequential(
             nn.Linear(latent_dim, 256, bias=False), nn.BatchNorm1d(256), nn.LeakyReLU(0.01),
             nn.Linear(256, 64, bias=False), nn.BatchNorm1d(64), nn.LeakyReLU(0.01),
@@ -346,6 +349,60 @@ class SCSeparatorMnistModel(SCSeparatorModel):
 
 
 class SCSeparatorBeautyganModel(SCSeparatorModel):
+    def __init__(self, device) -> None:
+        dimension = 2
+        in_channels = 3
+        out_channels = 3
+        latent_dim = 256
+        num_blocks = [4, 4]
+        planes = [64, 128, 256]
+
+        encoder: nn.Module = nn.Sequential(
+            nn.Conv2d(in_channels, planes[0], kernel_size=7, stride=1, padding=3, bias=False),
+            nn.InstanceNorm2d(planes[0], affine=True), nn.LeakyReLU(0.01), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            simple_resnet(dimension, num_blocks, planes,
+                          transpose=False, norm='InstanceNorm', activation='LeakyReLU', pool=False),
+            Permute((0, 2, 3, 1)), nn.Linear(planes[-1], latent_dim))
+        decoder: nn.Module = nn.Sequential(
+            nn.Linear(latent_dim, planes[-1]), Permute((0, 3, 1, 2)),
+            simple_resnet(dimension, num_blocks, planes,
+                          transpose=True, norm='InstanceNorm', activation='LeakyReLU', pool=False),
+            nn.ConvTranspose2d(planes[0], planes[0], kernel_size=3, stride=2, padding=1, output_padding=1, bias=False),
+            nn.InstanceNorm2d(planes[0], affine=True), nn.LeakyReLU(0.01),
+            nn.ConvTranspose2d(planes[0], out_channels, kernel_size=7, stride=1, padding=3, output_padding=0),
+            nn.Tanh())
+        style_w: nn.Module = nn.Linear(latent_dim, latent_dim, bias=False)
+        content_disc: nn.Module = nn.Sequential(
+            Permute((0, 3, 1, 2)),
+            nn.Conv2d(latent_dim, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+            nn.Flatten(), nn.Linear(4*4*64, 1))
+        style_disc: nn.Module = nn.Sequential(
+            Permute((0, 3, 1, 2)),
+            nn.Conv2d(latent_dim, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+            nn.Flatten(), nn.Linear(4*4*64, 1))
+        #content_disc: nn.Module = nn.Sequential(
+        #    Permute((0, 3, 1, 2)),
+        #    spectral_norm(nn.Conv2d(latent_dim, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+        #    spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+        #    spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+        #    nn.Flatten(), nn.Linear(4*4*64, 1))
+        #style_disc: nn.Module = nn.Sequential(
+        #    Permute((0, 3, 1, 2)),
+        #    spectral_norm(nn.Conv2d(latent_dim, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+        #    spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+        #    spectral_norm(nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True)), nn.LeakyReLU(0.01),
+        #    nn.Flatten(), nn.Linear(4*4*64, 1))
+        scaler: Scaler = Scaler(2., 0.5)
+
+        super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
+        self.apply(weights_init)
+
+
+class SCGanBeautyganModel(SCSeparatorModel):
     def __init__(self, device) -> None:
         dimension = 2
         in_channels = 3
@@ -461,21 +518,17 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
 
         # Source Disc Loss
         xp1: Tensor = output['xp1']
-        #xp1_idt: Tensor = output['xp1_idt']
-        #xp21: Tensor = self._decoder(c2 + s1)
-        xp21: Tensor = self._decoder(c2)
+        xp21: Tensor = output['xp21']
         #xp20: Tensor = self._decoder(c2)
         b1_source: Tensor = self._source_disc(xp1.detach())
-        #b1_source2: Tensor = self._source_disc(xp1_idt.detach())
         b2_source: Tensor = self._source_disc(grad_reverse(xp21, gamma=gamma_source))
         #b2_source2: Tensor = self._source_disc(grad_reverse(xp20, gamma=gamma_source))
 
         # Reference Disc Loss
         xp2: Tensor = output['xp2']
         #xp2_idt: Tensor = output['xp2_idt']
-        xp12: Tensor = self._decoder(c1 + s2)
+        xp12: Tensor = output['xp12']
         b1_reference: Tensor = self._reference_disc(xp2.detach())
-        #b1_reference2: Tensor = self._reference_disc(xp2_idt.detach())
         b2_reference: Tensor = self._reference_disc(grad_reverse(xp12, gamma=gamma_reference))
 
         # Content Segmentation Disc Loss
