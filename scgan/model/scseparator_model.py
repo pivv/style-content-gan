@@ -166,15 +166,15 @@ class SCSeparatorModel(BaseModel):
         s2, c2 = self._style_content_separate(z2)
 
         # Identity Loss
-        #xp1_idt: Tensor = self._decoder(z1)
-        xp1_idt: Tensor = self._decoder(c1)
+        xp1_idt: Tensor = self._decoder(z1)
+        #xp1_idt: Tensor = self._decoder(c1)
         #xp1_idt2: Tensor = self._decoder(c1)  # Instead using latent, using content only.
         xp2_idt: Tensor = self._decoder(z2)
 
         # Cycle Loss
         xp12: Tensor = self._decoder(c1 + s2)
-        #xp21: Tensor = self._decoder(c2 + s1)
-        xp21: Tensor = self._decoder(c2)
+        xp21: Tensor = self._decoder(c2 + s1)
+        #xp21: Tensor = self._decoder(c2)
         s12, c12 = self._style_content_separate(self._encoder(xp12))
         s21, c21 = self._style_content_separate(self._encoder(xp21))
         #xp1_cycle: Tensor = self._decoder(c12 + s1)
