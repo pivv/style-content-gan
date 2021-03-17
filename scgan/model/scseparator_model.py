@@ -406,7 +406,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3, bias=False))
+            nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3, bias=True))
 
         self._source_criterion = nn.BCEWithLogitsLoss()
         self._reference_criterion = nn.BCEWithLogitsLoss()
@@ -542,9 +542,9 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         seg2: Tensor = batch['seg2']
         b1_style_seg: Tensor = output['b1_style_seg']
         b2_style_seg: Tensor = output['b2_style_seg']
-        loss_style_seg: Tensor = lambda_style_seg * (b1_style_seg.mean() - b2_style_seg.mean()) / 2.
-        #loss_style_seg: Tensor = lambda_style_seg * (
-        #        self._style_seg_criterion(b1_style_seg, seg1) + self._style_seg_criterion(b2_style_seg, seg2)) / 2.
+        #loss_style_seg: Tensor = lambda_style_seg * (b1_style_seg.mean() - b2_style_seg.mean()) / 2.
+        loss_style_seg: Tensor = lambda_style_seg * (
+                self._style_seg_criterion(b1_style_seg, seg1) + self._style_seg_criterion(b2_style_seg, seg2)) / 2.
         correct1: Tensor = b1_style_seg.argmax(dim=1) == seg1
         correct2: Tensor = b2_style_seg.argmax(dim=1) == seg2
         accuracy_style_seg: Tensor = (correct1.sum() + correct2.sum()) / float(torch.numel(correct1) +
