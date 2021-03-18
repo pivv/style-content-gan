@@ -147,9 +147,10 @@ class PairedCycleGanModel(BaseModel):
             img2 = self._scaler.unscaling(xp2)[ix] * 255
             vec1 = img1[:, index1[:, 0], index1[:, 1]]
             vec2 = img2[:, index2[:, 0], index2[:, 1]]
-            vec_match = histogram_matching(vec1.detach().cpu(), vec2.detach().cpu())
+            vec_match = histogram_matching(vec1.detach().cpu(), vec2.detach().cpu()).to(self._device)
             crit = torch.nn.L1Loss(reduction='sum')
-            loss += crit(vec1, vec_match.to(self._device))
+            print(vec1.device, vec_match.device)
+            loss += crit(vec1, vec_match)
         return loss / xp1.numel()
 
     def loss_function(self, batch: Dict[str, Tensor], output: Dict[str, Tensor], params: Dict[str, Any],
