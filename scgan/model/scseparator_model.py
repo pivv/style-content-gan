@@ -173,10 +173,10 @@ class SCSeparatorModel(BaseModel):
 
         # Cycle Loss
         xp12: Tensor = self._decoder((c1 + s2).detach())
-        #xp21: Tensor = self._decoder(c2 + s1)
+        #xp21: Tensor = self._decoder((c2 + s1).detach())
         xp21: Tensor = self._decoder(c2.detach())
-        s12, c12 = self._style_content_separate(self._encoder(xp12.detach()))
-        s21, c21 = self._style_content_separate(self._encoder(xp21.detach()))
+        s12, c12 = self._style_content_separate(self._encoder(xp12))
+        s21, c21 = self._style_content_separate(self._encoder(xp21))
         #xp1_cycle: Tensor = self._decoder(c12 + s1)
         xp1_cycle: Tensor = self._decoder(c12)
         xp2_cycle: Tensor = self._decoder(c21 + s2)
