@@ -6,6 +6,22 @@ from torch.autograd import grad
 import torch
 
 
+class SimpleResidualBlock(nn.Module):
+    """Residual Block."""
+    def __init__(self, dim_in, dim_out):
+        super().__init__()
+        self.main = nn.Sequential(
+            nn.InstanceNorm2d(dim_in, affine=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(dim_in, dim_out, kernel_size=3, stride=1, padding=1, bias=False),
+            nn.InstanceNorm2d(dim_out, affine=True),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(dim_out, dim_out, kernel_size=3, stride=1, padding=1, bias=False))
+
+    def forward(self, x):
+        return x + self.main(x)
+
+
 class MyConv(nn.Module):
     def __init__(self, dimension, input_dim, output_dim, kernel_size,
                  stride=1, dilation=1, bias=False, transpose=False):
@@ -309,26 +325,6 @@ class BottleneckBlock(nn.Module):
         output = self.relu3(shortcut + output)
 
         return output
-
-
-def weights_init(m):
-    if isinstance(m, (nn.Conv1d, nn.ConvTranspose1d, nn.Conv2d, nn.ConvTranspose2d)):
-        nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
-        if m.bias is not None:
-            nn.init.constant_(m.bias, 0.0)
-    if isinstance(m, nn.Linear):
-        nn.init.xavier_normal_(m.weight)
-        if m.bias is not None:
-            nn.init.constant_(m.bias, 0.0)
-    if isinstance(m, (nn.BatchNorm1d, nn.InstanceNorm1d, nn.BatchNorm2d, nn.InstanceNorm2d, nn.GroupNorm)):
-        nn.init.constant_(m.weight, 1)
-        nn.init.constant_(m.bias, 0)
-    if isinstance(m, ResidualBlock):
-        if m.bn2 is not None:
-            nn.init.constant_(m.bn2.weight, 0)
-    if isinstance(m, BottleneckBlock):
-        if m.bn3 is not None:
-            nn.init.constant_(m.bn3.weight, 0)
 
 
 def make_residual_layer(dimension, block, inplanes, planes, num_block,

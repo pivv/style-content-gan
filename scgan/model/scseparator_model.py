@@ -30,7 +30,8 @@ from scgan.util.scaler import Scaler
 from scgan.deep.loss import SiameseLoss, BinaryEntropyWithLogitsLoss
 from scgan.deep.layer import View, Permute
 from scgan.deep.grad import grad_scale, grad_reverse
-from scgan.deep.resnet import weights_init, simple_resnet, simple_bottleneck_resnet
+from scgan.deep.resnet import simple_resnet, simple_bottleneck_resnet
+from scgan.deep.initialize import weights_init_resnet
 from scgan.deep.norm import spectral_norm
 
 
@@ -353,7 +354,7 @@ class SCSeparatorMnistModel(SCSeparatorModel):
         scaler: Scaler = Scaler(2., 0.5)
 
         super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
-        self.apply(weights_init)
+        self.apply(weights_init_resnet)
 
 
 class SCSeparatorBeautyganModel(SCSeparatorModel):
@@ -435,7 +436,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         self._style_seg_criterion = nn.CrossEntropyLoss()
 
         self.to(self._device)
-        self.apply(weights_init)
+        self.apply(weights_init_resnet)
 
     def _update_optimizers(self, loss_dict: Dict[str, Tensor], params: Dict[str, Any],
                            global_step: int = 0) -> None:

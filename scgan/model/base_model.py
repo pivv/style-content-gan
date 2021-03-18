@@ -120,6 +120,12 @@ class BaseModel(nn.Module):
             torch.cuda.empty_cache()
         self.load(os.path.join(run_dir, 'best_model.pth.tar'))
 
+    def print(self):
+        num_params = 0
+        for p in self.parameters():
+            num_params += p.numel()
+        print(f"The number of parameters is : {num_params}.")
+
     def load(self, load_path: str) -> None:
         self.load_state_dict(torch.load(load_path))
 
