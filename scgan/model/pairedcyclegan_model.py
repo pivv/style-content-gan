@@ -149,18 +149,8 @@ class PairedCycleGanModel(BaseModel):
             vec2 = img2[:, index2[:, 0], index2[:, 1]]
             vec_match = histogram_matching(vec1.detach().cpu(), vec2.detach().cpu())
             crit = torch.nn.L1Loss(reduction='sum')
-            loss += crit(vec1, vec_match.to(self.device))
+            loss += crit(vec1, vec_match.to(self._device))
         return loss / xp1.numel()
-
-    def rebound_box(self, mask_A, mask_A_face):
-        index_tmp = mask_A.nonzero()
-        x_A_index = index_tmp[:, 2]
-        y_A_index = index_tmp[:, 3]
-        mask_A_temp = mask_A.copy_(mask_A)
-        mask_A_temp[:, :, min(x_A_index)-10:max(x_A_index)+11, min(y_A_index)-10:max(y_A_index)+11] = \
-            mask_A_face[:, :, min(x_A_index)-10:max(x_A_index)+11, min(y_A_index)-10:max(y_A_index)+11]
-        mask_A_temp = mask_A_temp.to(self.device)
-        return mask_A_temp
 
     def loss_function(self, batch: Dict[str, Tensor], output: Dict[str, Tensor], params: Dict[str, Any],
                       global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
