@@ -250,8 +250,8 @@ class SCSeparatorModel(BaseModel):
         # 3. Content Disc Loss
         b1_content: Tensor = output['b1_content']
         b2_content: Tensor = output['b2_content']
-        loss_content: Tensor = lambda_content * (torch.sigmoid(b1_content).mean() - torch.sigmoid(b2_content).mean()) / 2.
-        #loss_content: Tensor = lambda_content * (b1_content.mean() - b2_content.mean()) / 2.
+        loss_content: Tensor = lambda_content * (b1_content.mean() - b2_content.mean()) / 2.
+        #loss_content: Tensor = lambda_content * (torch.sigmoid(b1_content).mean() - torch.sigmoid(b2_content).mean()) / 2.
         #loss_content: Tensor = lambda_content * (
         #        self._content_criterion(b1_content, torch.zeros_like(b1_content)) +
         #        self._content_criterion(b2_content, torch.ones_like(b2_content))) / 2.
@@ -262,8 +262,8 @@ class SCSeparatorModel(BaseModel):
         # 4. Style Disc Loss
         b1_style: Tensor = output['b1_style']
         b2_style: Tensor = output['b2_style']
-        loss_style: Tensor = lambda_style * (torch.sigmoid(b1_style).mean() - torch.sigmoid(b2_style).mean()) / 2.
-        #loss_style: Tensor = lambda_style * (b1_style.mean() - b2_style.mean()) / 2.
+        loss_style: Tensor = lambda_style * (b1_style.mean() - b2_style.mean()) / 2.
+        #loss_style: Tensor = lambda_style * (torch.sigmoid(b1_style).mean() - torch.sigmoid(b2_style).mean()) / 2.
         #loss_style: Tensor = lambda_style * (
         #        self._style_criterion(b1_style, torch.zeros_like(b1_style)) +
         #        self._style_criterion(b2_style, torch.ones_like(b2_style))) / 2.
@@ -367,13 +367,13 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
             nn.Conv2d(latent_dim, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
-            nn.Flatten(), nn.Linear(4*4*64, 1, bias=True))
+            nn.Flatten(), spectral_norm(nn.Linear(4*4*64, 1, bias=False)))
         style_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
             nn.Conv2d(latent_dim, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
-            nn.Flatten(), nn.Linear(4*4*64, 1, bias=True))
+            nn.Flatten(), spectral_norm(nn.Linear(4*4*64, 1, bias=False)))
         scaler: Scaler = Scaler(2., 0.5)
 
         super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
@@ -385,7 +385,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
             nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-            nn.Flatten(), nn.Linear(4*4*128, 1, bias=True))
+            nn.Flatten(), spectral_norm(nn.Linear(4*4*128, 1, bias=False)))
         self._reference_disc: nn.Module = nn.Sequential(
             nn.Conv2d(in_channels, 32, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(32, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(32, 32, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(32, affine=True), nn.LeakyReLU(0.01),
@@ -393,7 +393,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
             nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-            nn.Flatten(), nn.Linear(4*4*128, 1, bias=True))
+            nn.Flatten(), spectral_norm(nn.Linear(4*4*128, 1, bias=False)))
 
         self._content_seg_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
@@ -401,14 +401,14 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3, bias=True))
+            spectral_norm(nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3, bias=False)))
         self._style_seg_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
             nn.Conv2d(latent_dim, 128, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(128, 64, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.ConvTranspose2d(64, 64, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3, bias=True))
+            spectral_norm(nn.Conv2d(64, 15, kernel_size=7, stride=1, padding=3, bias=False)))
 
         self._source_criterion = nn.BCEWithLogitsLoss()
         self._reference_criterion = nn.BCEWithLogitsLoss()
@@ -496,8 +496,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         #b1_source2: Tensor = output['b1_source2']
         b2_source: Tensor = output['b2_source']
         #b2_source2: Tensor = output['b2_source2']
-        loss_source: Tensor = lambda_source * (torch.sigmoid(b1_source).mean() - torch.sigmoid(b2_source).mean()) / 2.
-        #loss_source: Tensor = lambda_source * (b1_source.mean() - b2_source.mean()) / 2.
+        loss_source: Tensor = lambda_source * (b1_source.mean() - b2_source.mean()) / 2.
+        #loss_source: Tensor = lambda_source * (torch.sigmoid(b1_source).mean() - torch.sigmoid(b2_source).mean()) / 2.
         #loss_source: Tensor = lambda_source * (
         #        self._source_criterion(b1_source, torch.zeros_like(b1_source)) +
         #        self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
@@ -517,8 +517,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_reference: Tensor = output['b1_reference']
         #b1_reference2: Tensor = output['b1_reference2']
         b2_reference: Tensor = output['b2_reference']
-        loss_reference: Tensor = lambda_reference * (torch.sigmoid(b1_reference).mean() - torch.sigmoid(b2_reference).mean()) / 2.
-        #loss_reference: Tensor = lambda_reference * (b1_reference.mean() - b2_reference.mean()) / 2.
+        loss_reference: Tensor = lambda_reference * (b1_reference.mean() - b2_reference.mean()) / 2.
+        #loss_reference: Tensor = lambda_reference * (torch.sigmoid(b1_reference).mean() - torch.sigmoid(b2_reference).mean()) / 2.
         #loss_reference: Tensor = lambda_reference * (
         #        self._reference_criterion(b1_reference, torch.zeros_like(b1_reference)) +
         #        self._reference_criterion(b2_reference, torch.ones_like(b2_reference))) / 2.
@@ -535,8 +535,11 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_content_seg: Tensor = output['b1_content_seg']
         b2_content_seg: Tensor = output['b2_content_seg']
         loss_content_seg: Tensor = - lambda_content_seg * (
-            F.softmax(b1_content_seg, dim=1).gather(dim=1, index=seg1.unsqueeze(1)).mean() +
-            F.softmax(b2_content_seg, dim=1).gather(dim=1, index=seg2.unsqueeze(1)).mean()) / 2.
+                b1_content_seg.gather(dim=1, index=seg1.unsqueeze(1)).mean() +
+                b2_content_seg.gather(dim=1, index=seg2.unsqueeze(1)).mean()) / 2.
+        #loss_content_seg: Tensor = - lambda_content_seg * (
+        #    F.softmax(b1_content_seg, dim=1).gather(dim=1, index=seg1.unsqueeze(1)).mean() +
+        #    F.softmax(b2_content_seg, dim=1).gather(dim=1, index=seg2.unsqueeze(1)).mean()) / 2.
         #loss_content_seg: Tensor = lambda_content_seg * (
         #        self._content_seg_criterion(b1_content_seg, seg1) + self._content_seg_criterion(b2_content_seg, seg2)) / 2.
         correct1: Tensor = b1_content_seg.argmax(dim=1) == seg1
@@ -548,8 +551,11 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_style_seg: Tensor = output['b1_style_seg']
         b2_style_seg: Tensor = output['b2_style_seg']
         loss_style_seg: Tensor = - lambda_style_seg * (
-                F.softmax(b1_style_seg, dim=1).gather(dim=1, index=seg1.unsqueeze(1)).mean() +
-                F.softmax(b2_style_seg, dim=1).gather(dim=1, index=seg2.unsqueeze(1)).mean()) / 2.
+                b1_style_seg.gather(dim=1, index=seg1.unsqueeze(1)).mean() +
+                b2_style_seg.gather(dim=1, index=seg2.unsqueeze(1)).mean()) / 2.
+        #loss_style_seg: Tensor = - lambda_style_seg * (
+        #        F.softmax(b1_style_seg, dim=1).gather(dim=1, index=seg1.unsqueeze(1)).mean() +
+        #        F.softmax(b2_style_seg, dim=1).gather(dim=1, index=seg2.unsqueeze(1)).mean()) / 2.
         #loss_style_seg: Tensor = lambda_style_seg * (b1_style_seg.mean() - b2_style_seg.mean()) / 2.
         #loss_style_seg: Tensor = lambda_style_seg * (
         #        self._style_seg_criterion(b1_style_seg, seg1) + self._style_seg_criterion(b2_style_seg, seg2)) / 2.
