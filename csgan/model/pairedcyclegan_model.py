@@ -30,14 +30,14 @@ from tensorboardX import SummaryWriter
 import matplotlib.pyplot as plt
 
 from .base_model import BaseModel
-from scgan.util.scaler import Scaler
-from scgan.util.histogram_matching import histogram_matching
-from scgan.deep.loss import SiameseLoss, BinaryEntropyWithLogitsLoss
-from scgan.deep.layer import View, Permute
-from scgan.deep.grad import grad_scale, grad_reverse
-from scgan.deep.resnet import SimpleResidualBlock, simple_resnet, simple_bottleneck_resnet
-from scgan.deep.initialize import weights_init_xavier
-from scgan.deep.norm import spectral_norm
+from csgan.util.scaler import Scaler
+from csgan.util.histogram_matching import histogram_matching
+from csgan.deep.loss import SiameseLoss, BinaryEntropyWithLogitsLoss
+from csgan.deep.layer import View, Permute
+from csgan.deep.grad import grad_scale, grad_reverse
+from csgan.deep.resnet import SimpleResidualBlock, simple_resnet, simple_bottleneck_resnet
+from csgan.deep.initialize import weights_init_xavier
+from csgan.deep.norm import spectral_norm
 
 
 class PairedCycleGanModel(BaseModel):
@@ -97,12 +97,6 @@ class PairedCycleGanModel(BaseModel):
         output: Dict[str, Tensor] = {'x1_idt': x1_idt, 'x2_idt': x2_idt, 'x12': x12, 'x21': x21,
                                      'x1_cycle': x1_cycle, 'x2_cycle': x2_cycle}
         return output
-
-    def _style_content_separate(self, z: Tensor) -> Tuple[Tensor, Tensor]:
-        s: Tensor = self._style_w(z)  # Style
-        assert(s.size() == z.size())
-        c: Tensor = z - s  # Content
-        return s, c
 
     def _post_processing(self, batch: Dict[str, Tensor], params: Dict[str, Any],
                          global_step: int = 0) -> None:

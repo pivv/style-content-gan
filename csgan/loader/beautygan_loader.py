@@ -16,7 +16,7 @@ import yaml
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from scgan.util.io import read_image
+from csgan.util.io import read_image
 
 
 SEG_CLASS_NUM = 15
