@@ -166,6 +166,7 @@ class PairedCycleGanModel(BaseModel):
                       global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
         # 0. Parameters
         ndis: int = params['ndis']  # 1
+        content_layer: int = params['content_layer']  # 20
         lambda_disc: float = params['lambda_disc']  # 1.
         lambda_idt: float = params['lambda_identity']  # 5.
         lambda_cycle: float = params['lambda_cycle']  # 10.
@@ -261,13 +262,13 @@ class PairedCycleGanModel(BaseModel):
             # vgg loss
             if lambda_vgg > 0:
                 with torch.no_grad():
-                    vgg_org = self._vgg.features[:self.content_layer+1](xp1).detach()
-                vgg_fake1 = self._vgg.features[:self.content_layer+1](fake1)
+                    vgg_org = self._vgg.features[:content_layer+1](xp1).detach()
+                vgg_fake1 = self._vgg.features[:content_layer+1](fake1)
                 loss_g1_vgg = self._l2_criterion(vgg_fake1, vgg_org) * lambda_vgg
 
                 with torch.no_grad():
-                    vgg_ref = self._vgg.features[:self.content_layer+1](xp2).detach()
-                vgg_fake2 = self._vgg.features[:self.content_layer+1](fake2)
+                    vgg_ref = self._vgg.features[:content_layer+1](xp2).detach()
+                vgg_fake2 = self._vgg.features[:content_layer+1](fake2)
                 loss_g2_vgg = self._l2_criterion(vgg_fake2, vgg_ref) * lambda_vgg
                 loss_vgg = (loss_g1_vgg + loss_g2_vgg) * 0.5
 
