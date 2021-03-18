@@ -73,11 +73,11 @@ class PairedCycleGanModel(BaseModel):
     def _set_optimizers(self, params: Dict[str, Any]) -> None:
         weight_decay: float = params['weight_decay']
         optimizer_G = optim.Adam(itertools.chain(self._G1.parameters(), self._G2.parameters()),
-                                 params['learning_rate_G'], (0.5, 0.999), weight_decay=weight_decay)
+                                 params['learning_rate'], (0.5, 0.999), weight_decay=weight_decay)
         optimizer_D1 = optim.Adam(filter(lambda p: p.requires_grad, self.D1.parameters()),
-                                  params['learning_rate_D'], weight_decay=weight_decay)
+                                  params['learning_rate'], weight_decay=weight_decay)
         optimizer_D2 = optim.Adam(filter(lambda p: p.requires_grad, self.D2.parameters()),
-                                  params['learning_rate_D'], weight_decay=weight_decay)
+                                  params['learning_rate'], weight_decay=weight_decay)
 
         self._optimizers = [optimizer_G, optimizer_D1, optimizer_D2]
         self._schedulers = [None, None, None]
