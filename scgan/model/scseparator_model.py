@@ -250,10 +250,10 @@ class SCSeparatorModel(BaseModel):
         # 3. Content Disc Loss
         b1_content: Tensor = output['b1_content']
         b2_content: Tensor = output['b2_content']
-        loss_content: Tensor = lambda_content * (b1_content.mean() - b2_content.mean()) / 2.
-        #loss_content: Tensor = lambda_content * (
-        #        self._content_criterion(b1_content, torch.zeros_like(b1_content)) +
-        #        self._content_criterion(b2_content, torch.ones_like(b2_content))) / 2.
+        #loss_content: Tensor = lambda_content * (b1_content.mean() - b2_content.mean()) / 2.
+        loss_content: Tensor = lambda_content * (
+                self._content_criterion(b1_content, torch.zeros_like(b1_content)) +
+                self._content_criterion(b2_content, torch.ones_like(b2_content))) / 2.
         correct1: Tensor = b1_content < 0
         correct2: Tensor = b2_content >= 0
         accuracy_content: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_content) + len(b2_content))
@@ -324,12 +324,12 @@ class SCSeparatorMnistModel(SCSeparatorModel):
         content_disc: nn.Module = nn.Sequential(
             nn.Linear(latent_dim, 256, bias=False), nn.BatchNorm1d(256), nn.LeakyReLU(0.01),
             nn.Linear(256, 64, bias=False), nn.BatchNorm1d(64), nn.LeakyReLU(0.01),
-            nn.Linear(64, 1, bias=False))
+            nn.Linear(64, 1, bias=True))
         style_disc: nn.Module = nn.Sequential(
             #nn.Dropout(p=0.5, inplace=False),
             nn.Linear(latent_dim, 256, bias=False), nn.BatchNorm1d(256), nn.LeakyReLU(0.01),
             nn.Linear(256, 64, bias=False), nn.BatchNorm1d(64), nn.LeakyReLU(0.01),
-            nn.Linear(64, 1, bias=False))
+            nn.Linear(64, 1, bias=True))
         scaler: Scaler = Scaler(2., 0.5)
 
         super().__init__(device, encoder, decoder, style_w, content_disc, style_disc, scaler)
@@ -365,7 +365,7 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
             nn.Conv2d(latent_dim, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
-            nn.Flatten(), nn.Linear(4*4*64, 1, bias=False))
+            nn.Flatten(), nn.Linear(4*4*64, 1, bias=True))
         style_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
             nn.Conv2d(latent_dim, 64, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
