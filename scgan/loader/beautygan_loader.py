@@ -23,13 +23,14 @@ SEG_CLASS_NUM = 15
 
 
 class BeautyganDataset(Dataset):
-    def __init__(self, root: str = '', image_size: int = 256, seg_size: int = 64) -> None:
+    def __init__(self, root: str = '', dirname: str = 'beautygan',
+                 image_size: int = 256, seg_size: int = 64) -> None:
         self._image_size = image_size
         self._seg_size = seg_size
-        self._non_makeup_dir: str = os.path.join(root, f"beautygan/images/non-makeup/")
-        self._makeup_dir: str = os.path.join(root, f"beautygan/images/makeup/")
-        self._non_makeup_seg_dir: str = os.path.join(root, f"beautygan/segs/non-makeup/")
-        self._makeup_seg_dir: str = os.path.join(root, f"beautygan/segs/makeup/")
+        self._non_makeup_dir: str = os.path.join(root, f"{dirname}/images/non-makeup/")
+        self._makeup_dir: str = os.path.join(root, f"{dirname}/images/makeup/")
+        self._non_makeup_seg_dir: str = os.path.join(root, f"{dirname}/segs/non-makeup/")
+        self._makeup_seg_dir: str = os.path.join(root, f"{dirname}/segs/makeup/")
         self._non_makeup_names: List[str] = os.listdir(self._non_makeup_dir)
         self._makeup_names: List[str] = os.listdir(self._makeup_dir)
 
