@@ -110,7 +110,7 @@ class PairedCycleGanModel(BaseModel):
             output: Dict[str, Tensor] = self._predict(batch)
             result_dir = os.path.join(params['run_dir'], 'results')
 
-            fig = plt.figure(figsize=(15, 20))
+            fig = plt.figure(figsize=(20, 15))
             for index in range(6):
                 ax = fig.add_subplot(6, 8, 8*index+1)
                 ax.imshow(batch['x1'][index, :3].detach().cpu().numpy().transpose(1, 2, 0))
