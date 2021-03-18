@@ -435,8 +435,7 @@ class GeneratorDeMakeup(nn.Module):
         layers_1.append(nn.Tanh())
         self.output_branch_1 = nn.Sequential(*layers_1)
 
-    def forward(self, x, mask_x):
-        x = torch.cat((x, mask_x[:, ::3, :, :]), dim=1)
+    def forward(self, x):
         input_x = self.input_branch_1(x)
         out = self.main(input_x)
         out_A = self.output_branch_1(out)
