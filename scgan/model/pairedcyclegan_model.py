@@ -139,7 +139,7 @@ class PairedCycleGanModel(BaseModel):
 
     def _masked_histogram_criterion(self, xp1: Tensor, xp2: Tensor, mask1: Tensor, mask2: Tensor) -> Tensor:
         # x1: bs x ch x h x w
-        loss: Tensor = torch.FloatTensor([0.])[0]
+        loss: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         for ix in range(xp1.size(0)):
             index1 = mask1[ix].nonzero()
             index2 = mask2[ix].nonzero()
@@ -149,7 +149,6 @@ class PairedCycleGanModel(BaseModel):
             vec2 = img2[:, index2[:, 0], index2[:, 1]]
             vec_match = histogram_matching(vec1.detach().cpu(), vec2.detach().cpu()).to(self._device)
             crit = torch.nn.L1Loss(reduction='sum')
-            print(vec1.device, vec_match.device)
             loss += crit(vec1, vec_match)
         return loss / xp1.numel()
 
@@ -180,9 +179,9 @@ class PairedCycleGanModel(BaseModel):
             fake1 = fake1.detach()
             fake2 = fake2.detach()
 
-        loss_d = torch.FloatTensor([0.])[0]
-        loss_d1_real = torch.FloatTensor([0.])[0]
-        loss_d2_real = torch.FloatTensor([0.])[0]
+        loss_d = torch.FloatTensor([0.])[0].to(self._device)
+        loss_d1_real = torch.FloatTensor([0.])[0].to(self._device)
+        loss_d2_real = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_disc > 0:
             out = self._D1(xp2)
             loss_d1_real = lambda_disc * self._gan_criterion(out, torch.ones_like(out))
@@ -208,13 +207,13 @@ class PairedCycleGanModel(BaseModel):
             loss_d = loss_d1 + loss_d2
 
         # ================== Train G ================== #
-        loss_g = torch.FloatTensor([0.])[0]
-        loss_idt = torch.FloatTensor([0.])[0]
-        loss_g1_fake = torch.FloatTensor([0.])[0]
-        loss_g2_fake = torch.FloatTensor([0.])[0]
-        loss_cycle = torch.FloatTensor([0.])[0]
-        loss_vgg = torch.FloatTensor([0.])[0]
-        loss_his = torch.FloatTensor([0.])[0]
+        loss_g = torch.FloatTensor([0.])[0].to(self._device)
+        loss_idt = torch.FloatTensor([0.])[0].to(self._device)
+        loss_g1_fake = torch.FloatTensor([0.])[0].to(self._device)
+        loss_g2_fake = torch.FloatTensor([0.])[0].to(self._device)
+        loss_cycle = torch.FloatTensor([0.])[0].to(self._device)
+        loss_vgg = torch.FloatTensor([0.])[0].to(self._device)
+        loss_his = torch.FloatTensor([0.])[0].to(self._device)
         if global_step % ndis == 0:
             self._D1.requires_grad_(False)
             self._D2.requires_grad_(False)
@@ -264,8 +263,8 @@ class PairedCycleGanModel(BaseModel):
                 loss_vgg = (loss_g1_vgg + loss_g2_vgg) * 0.5
 
             # color_histogram loss
-            loss_g1_his = torch.FloatTensor([0.])[0]
-            loss_g2_his = torch.FloatTensor([0.])[0]
+            loss_g1_his = torch.FloatTensor([0.])[0].to(self._device)
+            loss_g2_his = torch.FloatTensor([0.])[0].to(self._device)
 
             # Convert tensor to variable
             # mask attribute: 0:background 1:face 2:left-eyebrown 3:right-eyebrown 4:left-eye 5: right-eye 6: nose
