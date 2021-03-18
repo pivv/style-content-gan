@@ -535,8 +535,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_content_seg: Tensor = output['b1_content_seg']
         b2_content_seg: Tensor = output['b2_content_seg']
         loss_content_seg: Tensor = - lambda_content_seg * (
-            F.softmax(b1_content_seg, dim=-1).gather(dim=-1, index=seg1.unsqueeze(-1)) +
-            F.softmax(b2_content_seg, dim=-1).gather(dim=-1, index=seg1.unsqueeze(-1))) / 2.
+            F.softmax(b1_content_seg, dim=-1).gather(dim=1, index=seg1.unsqueeze(-1)) +
+            F.softmax(b2_content_seg, dim=-1).gather(dim=1, index=seg1.unsqueeze(-1))) / 2.
         #loss_content_seg: Tensor = lambda_content_seg * (
         #        self._content_seg_criterion(b1_content_seg, seg1) + self._content_seg_criterion(b2_content_seg, seg2)) / 2.
         correct1: Tensor = b1_content_seg.argmax(dim=1) == seg1
@@ -550,8 +550,8 @@ class SCSeparatorBeautyganModel(SCSeparatorModel):
         b1_style_seg: Tensor = output['b1_style_seg']
         b2_style_seg: Tensor = output['b2_style_seg']
         loss_style_seg: Tensor = - lambda_style_seg * (
-                F.softmax(b1_style_seg, dim=-1).gather(dim=-1, index=seg1.unsqueeze(-1)) +
-                F.softmax(b2_style_seg, dim=-1).gather(dim=-1, index=seg1.unsqueeze(-1))) / 2.
+                F.softmax(b1_style_seg, dim=-1).gather(dim=1, index=seg1.unsqueeze(-1)) +
+                F.softmax(b2_style_seg, dim=-1).gather(dim=1, index=seg1.unsqueeze(-1))) / 2.
         #loss_style_seg: Tensor = lambda_style_seg * (b1_style_seg.mean() - b2_style_seg.mean()) / 2.
         #loss_style_seg: Tensor = lambda_style_seg * (
         #        self._style_seg_criterion(b1_style_seg, seg1) + self._style_seg_criterion(b2_style_seg, seg2)) / 2.
