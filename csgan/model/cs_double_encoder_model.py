@@ -146,7 +146,7 @@ class CSDoubleEncoderModel(BaseModel):
                 output: Dict[str, Tensor] = self._predict(batch)
             result_dir = os.path.join(params['run_dir'], 'results')
 
-            n: int = min(6, len(batch))
+            n: int = len(batch['x1'])
             fig = plt.figure(figsize=(20, (20 * n) // 8))
             for index in range(n):
                 ax = fig.add_subplot(n, 8, 8*index+1)
