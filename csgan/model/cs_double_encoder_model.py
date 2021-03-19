@@ -390,8 +390,8 @@ class CSDoubleEncoderModel(BaseModel):
 
         loss_content_seg_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_content_seg > 0:
-            b1_content_seg: Tensor = F.softmax(self._content_seg_encoder_disc(c1, dim=1)).gather(dim=1, index=seg1.unsqueeze(1))
-            b2_content_seg: Tensor = F.softmax(self._content_seg_encoder_disc(c2, dim=1)).gather(dim=1, index=seg2.unsqueeze(1))
+            b1_content_seg: Tensor = F.softmax(self._content_seg_encoder_disc(c1), dim=1).gather(dim=1, index=seg1.unsqueeze(1))
+            b2_content_seg: Tensor = F.softmax(self._content_seg_encoder_disc(c2), dim=1).gather(dim=1, index=seg2.unsqueeze(1))
 
             loss_content_seg_encoder: Tensor = lambda_content_seg * gamma_content_seg * (
                     self._content_seg_criterion(b1_content_seg, torch.ones_like(b1_content_seg)) +
@@ -401,8 +401,8 @@ class CSDoubleEncoderModel(BaseModel):
 
         loss_style_seg_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_style_seg > 0:
-            b1_style_seg: Tensor = F.softmax(self._style_seg_encoder_disc(s1, dim=1)).gather(dim=1, index=seg1.unsqueeze(1))
-            b2_style_seg: Tensor = F.softmax(self._style_seg_encoder_disc(s2, dim=1)).gather(dim=1, index=seg2.unsqueeze(1))
+            b1_style_seg: Tensor = F.softmax(self._style_seg_encoder_disc(s1), dim=1).gather(dim=1, index=seg1.unsqueeze(1))
+            b2_style_seg: Tensor = F.softmax(self._style_seg_encoder_disc(s2), dim=1).gather(dim=1, index=seg2.unsqueeze(1))
 
             loss_style_seg_encoder: Tensor = lambda_style_seg * gamma_style_seg * (
                     self._style_seg_criterion(b1_style_seg, torch.zeros_like(b1_style_seg)) +
