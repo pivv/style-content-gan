@@ -316,6 +316,8 @@ class CSDoubleEncoderModel(BaseModel):
         loss_style_seg: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         accuracy_style_seg: Tensor = torch.FloatTensor([0.5])[0].to(self._device)
         if lambda_style_seg > 0:
+            print(self._style_seg_disc(s1_detach).size())
+            print(seg1.unsqueeze(1).size())
             b1_style_seg: Tensor = F.softmax(self._style_seg_disc(s1_detach), dim=1).gather(dim=1, index=seg1.unsqueeze(1))
             b2_style_seg: Tensor = F.softmax(self._style_seg_disc(s2_detach), dim=1).gather(dim=1, index=seg2.unsqueeze(1))
 
