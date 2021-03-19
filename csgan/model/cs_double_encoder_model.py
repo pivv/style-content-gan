@@ -60,15 +60,19 @@ class CSDoubleEncoderModel(BaseModel):
 
         self._identity_criterion = nn.L1Loss()
         self._cycle_criterion = nn.L1Loss()
-        self._content_criterion = nn.MSELoss()
-        self._style_criterion = nn.MSELoss()
+        self._content_criterion = nn.BCEWithLogitsLoss()
+        self._style_criterion = nn.BCEWithLogitsLoss()
+        #self._content_criterion = nn.MSELoss()
+        #self._style_criterion = nn.MSELoss()
         self._siamese_criterion = SiameseLoss()
         #self._siamese_criterion = L1SiameseLoss()
 
-        self._source_criterion = nn.MSELoss()
-        self._reference_criterion = nn.MSELoss()
-        self._content_seg_criterion = nn.MSELoss()
-        self._style_seg_criterion = nn.MSELoss()
+        self._source_criterion = nn.BCEWithLogitsLoss()
+        self._reference_criterion = nn.BCEWithLogitsLoss()
+        #self._source_criterion = nn.MSELoss()
+        #self._reference_criterion = nn.MSELoss()
+        self._content_seg_criterion = nn.BCELoss()
+        self._style_seg_criterion = nn.BCELoss()
 
         self.to(self._device)
 
@@ -146,8 +150,8 @@ class CSDoubleEncoderModel(BaseModel):
                 output: Dict[str, Tensor] = self._predict(batch)
             result_dir = os.path.join(params['run_dir'], 'results')
 
-            n: int = len(batch['x1'])
-            fig = plt.figure(figsize=(20, (20 * n) // 8))
+            n: int = min(8, len(batch['x1']))
+            fig = plt.figure(figsize=(20., 20.*float(n)/8.))
             for index in range(n):
                 ax = fig.add_subplot(n, 8, 8*index+1)
                 ax.imshow(batch['x1'][index, :3].detach().cpu().numpy().transpose(1, 2, 0))
@@ -566,7 +570,7 @@ class CSDoubleEconderMnistModel(CSDoubleEncoderModel):
     def _cs_to_latent(self, c: Tensor, s: Tensor = None) -> Tensor:
         #z: Tensor = c + s if s is not None else c  # Addition
         if s is None:
-            s = torch.zeros((len(c), self._style_dim, 1, 1)).to(self._device)
+            s = torch.zeros((len(c), self._style_dim)).to(self._device)
         z: Tensor = torch.cat([c, s], dim=1)
         return z
 
