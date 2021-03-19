@@ -60,17 +60,17 @@ class CSDoubleEncoderModel(BaseModel):
 
         self._identity_criterion = nn.L1Loss()
         self._cycle_criterion = nn.L1Loss()
-        self._content_criterion = nn.BCEWithLogitsLoss()
-        self._style_criterion = nn.BCEWithLogitsLoss()
-        #self._content_criterion = nn.MSELoss()
-        #self._style_criterion = nn.MSELoss()
+        #self._content_criterion = nn.BCEWithLogitsLoss()
+        #self._style_criterion = nn.BCEWithLogitsLoss()
+        self._content_criterion = nn.MSELoss()
+        self._style_criterion = nn.MSELoss()
         self._siamese_criterion = SiameseLoss()
         #self._siamese_criterion = L1SiameseLoss()
 
-        self._source_criterion = nn.BCEWithLogitsLoss()
-        self._reference_criterion = nn.BCEWithLogitsLoss()
-        #self._source_criterion = nn.MSELoss()
-        #self._reference_criterion = nn.MSELoss()
+        #self._source_criterion = nn.BCEWithLogitsLoss()
+        #self._reference_criterion = nn.BCEWithLogitsLoss()
+        self._source_criterion = nn.MSELoss()
+        self._reference_criterion = nn.MSELoss()
         self._content_seg_criterion = nn.BCELoss()
         self._style_seg_criterion = nn.BCELoss()
 
@@ -226,10 +226,13 @@ class CSDoubleEncoderModel(BaseModel):
 
             loss_content: Tensor = lambda_content * (self._content_criterion(b1_content, torch.ones_like(b1_content)) +
                                                      self._content_criterion(b2_content, torch.zeros_like(b2_content))) / 2.
-            correct1: Tensor = b1_content >= 0.
-            correct2: Tensor = b2_content < 0.
-            #correct1: Tensor = b1_content >= 0.5
-            #correct2: Tensor = b2_content < 0.5
+            if isinstance(self._content_criterion, nn.BCEWithLogitsLoss):
+                correct1: Tensor = b1_content >= 0.
+                correct2: Tensor = b2_content < 0.
+            else:
+                assert(isinstance(self._content_criterion, nn.MSELoss))
+                correct1: Tensor = b1_content >= 0.5
+                correct2: Tensor = b2_content < 0.5
             accuracy_content: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_content) + len(b2_content))
 
             optimizer_content_disc.zero_grad()
@@ -246,10 +249,13 @@ class CSDoubleEncoderModel(BaseModel):
 
             loss_style: Tensor = lambda_style * (self._style_criterion(b1_style, torch.ones_like(b1_style)) +
                                                  self._style_criterion(b2_style, torch.zeros_like(b2_style))) / 2.
-            correct1: Tensor = b1_style >= 0.
-            correct2: Tensor = b2_style < 0.
-            #correct1: Tensor = b1_style >= 0.5
-            #correct2: Tensor = b2_style < 0.5
+            if isinstance(self._style_criterion, nn.BCEWithLogitsLoss):
+                correct1: Tensor = b1_style >= 0.
+                correct2: Tensor = b2_style < 0.
+            else:
+                assert(isinstance(self._style_criterion, nn.MSELoss))
+                correct1: Tensor = b1_style >= 0.5
+                correct2: Tensor = b2_style < 0.5
             accuracy_style: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_style) + len(b2_style))
 
             optimizer_style_disc.zero_grad()
@@ -268,10 +274,13 @@ class CSDoubleEncoderModel(BaseModel):
 
             loss_source: Tensor = lambda_source * (self._source_criterion(b1_source, torch.ones_like(b1_source)) +
                                                    self._source_criterion(b2_source, torch.zeros_like(b2_source))) / 2.
-            correct1: Tensor = b1_source >= 0.
-            correct2: Tensor = b2_source < 0.
-            #correct1: Tensor = b1_source >= 0.5
-            #correct2: Tensor = b2_source < 0.5
+            if isinstance(self._source_criterion, nn.BCEWithLogitsLoss):
+                correct1: Tensor = b1_source >= 0.
+                correct2: Tensor = b2_source < 0.
+            else:
+                assert(isinstance(self._source_criterion, nn.MSELoss))
+                correct1: Tensor = b1_source >= 0.5
+                correct2: Tensor = b2_source < 0.5
             accuracy_source: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_source) + len(b2_source))
 
             optimizer_source_disc.zero_grad()
@@ -290,10 +299,13 @@ class CSDoubleEncoderModel(BaseModel):
 
             loss_reference: Tensor = lambda_reference * (self._reference_criterion(b1_reference, torch.ones_like(b1_reference)) +
                                                          self._reference_criterion(b2_reference, torch.zeros_like(b2_reference))) / 2.
-            correct1: Tensor = b1_reference >= 0.
-            correct2: Tensor = b2_reference < 0.
-            #correct1: Tensor = b1_reference >= 0.5
-            #correct2: Tensor = b2_reference < 0.5
+            if isinstance(self._reference_criterion, nn.BCEWithLogitsLoss):
+                correct1: Tensor = b1_reference >= 0.
+                correct2: Tensor = b2_reference < 0.
+            else:
+                assert(isinstance(self._reference_criterion, nn.MSELoss))
+                correct1: Tensor = b1_reference >= 0.5
+                correct2: Tensor = b2_reference < 0.5
             accuracy_reference: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_reference) + len(b2_reference))
 
             optimizer_reference_disc.zero_grad()
