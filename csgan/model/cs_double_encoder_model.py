@@ -589,7 +589,7 @@ class CSDoubleEconderBeautyganModel(CSDoubleEncoderModel):
                           transpose=False, norm='InstanceNorm', activation='LeakyReLU', pool=False),
             nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(planes[-1], style_dim))
         decoder: nn.Module = nn.Sequential(
-            Permute((0, 3, 1, 2)), nn.Linear(latent_dim, planes[-1]),
+            nn.Linear(latent_dim, planes[-1]), Permute((0, 3, 1, 2)),
             simple_resnet(dimension, num_blocks, planes,
                           transpose=True, norm='InstanceNorm', activation='LeakyReLU', pool=False),
             nn.ConvTranspose2d(planes[0], planes[0], kernel_size=3, stride=2, padding=1, output_padding=1, bias=False),
