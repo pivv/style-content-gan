@@ -629,11 +629,12 @@ class CSDoubleEconderBeautyganModel(CSDoubleEncoderModel):
             nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(256, 1, bias=True))
-        style_disc: nn.Module = None
-        #style_disc: nn.Module = nn.Sequential(
-        #    nn.Linear(style_dim, 256, bias=False), nn.LayerNorm(256), nn.LeakyReLU(0.01),
-        #    nn.Linear(256, 64, bias=False), nn.LayerNorm(64), nn.LeakyReLU(0.01),
-        #    nn.Linear(64, 1, bias=True))
+        style_disc: nn.Module = nn.Sequential(
+            Permute((0, 3, 1, 2)),
+            nn.Conv2d(style_dim, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(256, 1, bias=True))
 
         source_disc: nn.Module = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
@@ -652,14 +653,13 @@ class CSDoubleEconderBeautyganModel(CSDoubleEncoderModel):
             nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(256, 1, bias=True))
 
-        content_seg_disc: nn.Module = None
-        #content_seg_disc: nn.Module = nn.Sequential(
-        #    Permute((0, 3, 1, 2)),
-        #    nn.Conv2d(latent_dim, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
-        #    nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
-        #    nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-        #    nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-        #    nn.Conv2d(128, 17, kernel_size=7, stride=1, padding=3, bias=True))
+        content_seg_disc: nn.Module = nn.Sequential(
+            Permute((0, 3, 1, 2)),
+            nn.Conv2d(content_dim, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(128, 17, kernel_size=7, stride=1, padding=3, bias=True))
         style_seg_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
             nn.Conv2d(style_dim, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
