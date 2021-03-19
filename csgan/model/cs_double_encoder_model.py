@@ -226,8 +226,10 @@ class CSDoubleEncoderModel(BaseModel):
 
             loss_content: Tensor = lambda_content * (self._content_criterion(b1_content, torch.ones_like(b1_content)) +
                                                      self._content_criterion(b2_content, torch.zeros_like(b2_content))) / 2.
-            correct1: Tensor = b1_content >= 0.5
-            correct2: Tensor = b2_content < 0.5
+            correct1: Tensor = b1_content >= 0.
+            correct2: Tensor = b2_content < 0.
+            #correct1: Tensor = b1_content >= 0.5
+            #correct2: Tensor = b2_content < 0.5
             accuracy_content: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_content) + len(b2_content))
 
             optimizer_content_disc.zero_grad()
@@ -244,8 +246,10 @@ class CSDoubleEncoderModel(BaseModel):
 
             loss_style: Tensor = lambda_style * (self._style_criterion(b1_style, torch.ones_like(b1_style)) +
                                                  self._style_criterion(b2_style, torch.zeros_like(b2_style))) / 2.
-            correct1: Tensor = b1_style >= 0.5
-            correct2: Tensor = b2_style < 0.5
+            correct1: Tensor = b1_style >= 0.
+            correct2: Tensor = b2_style < 0.
+            #correct1: Tensor = b1_style >= 0.5
+            #correct2: Tensor = b2_style < 0.5
             accuracy_style: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_style) + len(b2_style))
 
             optimizer_style_disc.zero_grad()
@@ -264,8 +268,10 @@ class CSDoubleEncoderModel(BaseModel):
 
             loss_source: Tensor = lambda_source * (self._source_criterion(b1_source, torch.ones_like(b1_source)) +
                                                    self._source_criterion(b2_source, torch.zeros_like(b2_source))) / 2.
-            correct1: Tensor = b1_source >= 0.5
-            correct2: Tensor = b2_source < 0.5
+            correct1: Tensor = b1_source >= 0.
+            correct2: Tensor = b2_source < 0.
+            #correct1: Tensor = b1_source >= 0.5
+            #correct2: Tensor = b2_source < 0.5
             accuracy_source: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_source) + len(b2_source))
 
             optimizer_source_disc.zero_grad()
@@ -284,8 +290,10 @@ class CSDoubleEncoderModel(BaseModel):
 
             loss_reference: Tensor = lambda_reference * (self._reference_criterion(b1_reference, torch.ones_like(b1_reference)) +
                                                          self._reference_criterion(b2_reference, torch.zeros_like(b2_reference))) / 2.
-            correct1: Tensor = b1_reference >= 0.5
-            correct2: Tensor = b2_reference < 0.5
+            correct1: Tensor = b1_reference >= 0.
+            correct2: Tensor = b2_reference < 0.
+            #correct1: Tensor = b1_reference >= 0.5
+            #correct2: Tensor = b2_reference < 0.5
             accuracy_reference: Tensor = (correct1.sum() + correct2.sum()) / float(len(b1_reference) + len(b2_reference))
 
             optimizer_reference_disc.zero_grad()
@@ -545,17 +553,25 @@ class CSDoubleEconderMnistModel(CSDoubleEncoderModel):
             nn.Linear(64, 1, bias=True))
         scaler: Scaler = Scaler(2., 0.5)
         source_disc: nn.Module = nn.Sequential(
-            nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-            nn.Flatten(), nn.Linear(7*7*128, 1, bias=False))
+            nn.Conv2d(in_channels, 64, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
+            nn.Flatten(), nn.Linear(7*7*128, 1, bias=True))
         reference_disc: nn.Module = nn.Sequential(
-            nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-            nn.Flatten(), nn.Linear(7*7*128, 1, bias=False))
+            nn.Conv2d(in_channels, 64, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(64, 128, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
+            nn.Flatten(), nn.Linear(7*7*128, 1, bias=True))
+        #source_disc: nn.Module = nn.Sequential(
+        #    nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+        #    nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+        #    nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
+        #    nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
+        #    nn.Flatten(), nn.Linear(7*7*128, 1, bias=True))
+        #reference_disc: nn.Module = nn.Sequential(
+        #    nn.Conv2d(in_channels, 64, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+        #    nn.Conv2d(64, 64, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
+        #    nn.Conv2d(64, 128, kernel_size=3, stride=1, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
+        #    nn.Conv2d(128, 128, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
+        #    nn.Flatten(), nn.Linear(7*7*128, 1, bias=True))
         content_seg_disc: nn.Module = None
         style_seg_disc: nn.Module = None
 
