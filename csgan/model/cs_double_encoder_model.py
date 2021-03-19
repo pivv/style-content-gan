@@ -508,8 +508,10 @@ class CSDoubleEconderMnistModel(CSDoubleEncoderModel):
         dimension = 2
         in_channels = 3
         content_dim = 512
-        style_dim = 64
-        latent_dim = content_dim + style_dim
+        style_dim = content_dim
+        latent_dim = content_dim
+        #style_dim = 64
+        #latent_dim = content_dim + style_dim
         num_blocks = [4]
         planes = [64, 64]
 
@@ -596,10 +598,10 @@ class CSDoubleEconderMnistModel(CSDoubleEncoderModel):
         self.apply(weights_init_resnet)
 
     def _cs_to_latent(self, c: Tensor, s: Tensor = None) -> Tensor:
-        #z: Tensor = c + s if s is not None else c  # Addition
         if s is None:
             s = torch.zeros((len(c), self._style_dim)).to(self._device)
-        z: Tensor = torch.cat([c, s], dim=1)
+        z: Tensor = c + s
+        #z: Tensor = torch.cat([c, s], dim=1)
         return z
 
 
@@ -609,8 +611,10 @@ class CSDoubleEconderBeautyganModel(CSDoubleEncoderModel):
         in_channels = 3
         out_channels = 3
         content_dim = 256
-        style_dim = 32
-        latent_dim = content_dim + style_dim
+        style_dim = content_dim
+        latent_dim = content_dim
+        #style_dim = 32
+        #latent_dim = content_dim + style_dim
         num_blocks = [4, 4]
         planes = [64, 128, 256]
 
@@ -695,7 +699,7 @@ class CSDoubleEconderBeautyganModel(CSDoubleEncoderModel):
     def _cs_to_latent(self, c: Tensor, s: Tensor = None) -> Tensor:
         if s is None:
             s = torch.zeros((len(c), 32, 32, self._style_dim)).to(self._device)
-        #z: Tensor = c + s
+        z: Tensor = c + s
         #z: Tensor = torch.cat([c, s.view((-1, 1, 1, self._style_dim)).expand((-1, 32, 32, -1))], dim=-1)
-        z: Tensor = torch.cat([c, s], dim=-1)
+        #z: Tensor = torch.cat([c, s], dim=-1)
         return z
