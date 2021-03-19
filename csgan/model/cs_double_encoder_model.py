@@ -146,7 +146,7 @@ class CSDoubleEncoderModel(BaseModel):
                 output: Dict[str, Tensor] = self._predict(batch)
             result_dir = os.path.join(params['run_dir'], 'results')
 
-            n: int = 6
+            n: int = min(6, len(batch))
             fig = plt.figure(figsize=(20, (20 * n) // 8))
             for index in range(n):
                 ax = fig.add_subplot(n, 8, 8*index+1)
@@ -361,12 +361,16 @@ class CSDoubleEncoderModel(BaseModel):
                     self._style_criterion(b1_style, torch.ones_like(b1_style)) +
                     self._style_criterion(b2_style, torch.zeros_like(b2_style))) / 2.
 
+        xp21: Tensor = self._decoder(self._cs_to_latent(c2))
+        xp12: Tensor = self._decoder(self._cs_to_latent(c1, s2))
+
         # 2-3. Source Encoder Loss
 
         loss_source_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_source > 0:
-            xp21_detach: Tensor = self._decoder(self._cs_to_latent(c2).detach())
-            b2_source: Tensor = self._source_disc(xp21_detach)
+            #xp21_detach: Tensor = self._decoder(self._cs_to_latent(c2).detach())
+            #b2_source: Tensor = self._source_disc(xp21_detach)
+            b2_source: Tensor = self._source_disc(xp21)
 
             loss_source_encoder: Tensor = lambda_source * gamma_source * (
                     self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
@@ -375,8 +379,9 @@ class CSDoubleEncoderModel(BaseModel):
 
         loss_reference_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_reference > 0:
-            xp12_detach: Tensor = self._decoder(self._cs_to_latent(c1, s2).detach())
-            b2_reference: Tensor = self._reference_disc(xp12_detach)
+            #xp12_detach: Tensor = self._decoder(self._cs_to_latent(c1, s2).detach())
+            #b2_reference: Tensor = self._reference_disc(xp12_detach)
+            b2_reference: Tensor = self._reference_disc(xp12)
 
             loss_reference_encoder: Tensor = lambda_reference * gamma_reference * (
                 self._reference_criterion(b2_reference, torch.ones_like(b2_reference))) / 2.
@@ -420,9 +425,6 @@ class CSDoubleEncoderModel(BaseModel):
 
         loss_cycle: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_cycle > 0:
-            xp21: Tensor = self._decoder(self._cs_to_latent(c2))
-            xp12: Tensor = self._decoder(self._cs_to_latent(c1, s2))
-
             xp1_cycle: Tensor = self._decoder(self._cs_to_latent(self._content_encoder(xp12)))
             xp2_cycle: Tensor = self._decoder(self._cs_to_latent(self._content_encoder(xp21), s2))
 
@@ -434,9 +436,9 @@ class CSDoubleEncoderModel(BaseModel):
 
         loss_siamese: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_siamese > 0:
-            loss_siamese: Tensor = lambda_siamese * (s1 * s1).mean()
+            #loss_siamese: Tensor = lambda_siamese * (s1 * s1).mean()
             #loss_siamese: Tensor = lambda_siamese * (s1.abs().mean() + self._siamese_criterion(s2, margin=1.)) / 2.
-            #loss_siamese: Tensor = lambda_siamese * ((s1 * s1).mean() + self._siamese_criterion(s2, margin=1.)) / 2.
+            loss_siamese: Tensor = lambda_siamese * ((s1 * s1).mean() + self._siamese_criterion(s2, margin=1.)) / 2.
         norm_s1: Tensor = torch.sqrt((s1 * s1).flatten(start_dim=1).mean(dim=1)).mean()
         norm_s2: Tensor = torch.sqrt((s2 * s2).flatten(start_dim=1).mean(dim=1)).mean()
 
