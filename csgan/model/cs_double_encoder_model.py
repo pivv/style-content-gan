@@ -296,12 +296,14 @@ class CSDoubleEncoderModel(BaseModel):
         loss_content_seg: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         accuracy_content_seg: Tensor = torch.FloatTensor([0.5])[0].to(self._device)
         if lambda_content_seg > 0:
-            b1_content_seg: Tensor = F.softmax(self._content_seg_disc(c1_detach), dim=1).gather(dim=1, index=seg1.unsqueeze(1))
-            b2_content_seg: Tensor = F.softmax(self._content_seg_disc(c2_detach), dim=1).gather(dim=1, index=seg2.unsqueeze(1))
+            b1_content_seg: Tensor = F.softmax(self._content_seg_disc(c1_detach), dim=1)
+            b2_content_seg: Tensor = F.softmax(self._content_seg_disc(c2_detach), dim=1)
+            b1_content_seg_gather = b1_content_seg.gather(dim=1, index=seg1.unsqueeze(1))
+            b2_content_seg_gather = b2_content_seg.gather(dim=1, index=seg2.unsqueeze(1))
 
             loss_content_seg: Tensor = lambda_content_seg * (
-                    self._content_seg_criterion(b1_content_seg, torch.ones_like(b1_content_seg)) +
-                    self._content_seg_criterion(b2_content_seg, torch.ones_like(b2_content_seg))) / 2.
+                    self._content_seg_criterion(b1_content_seg_gather, torch.ones_like(b1_content_seg_gather)) +
+                    self._content_seg_criterion(b2_content_seg_gather, torch.ones_like(b2_content_seg_gather))) / 2.
             correct1: Tensor = b1_content_seg.argmax(dim=1) == seg1
             correct2: Tensor = b2_content_seg.argmax(dim=1) == seg2
             accuracy_content_seg: Tensor = (correct1.sum() + correct2.sum()) / float(torch.numel(correct1) +
@@ -316,12 +318,14 @@ class CSDoubleEncoderModel(BaseModel):
         loss_style_seg: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         accuracy_style_seg: Tensor = torch.FloatTensor([0.5])[0].to(self._device)
         if lambda_style_seg > 0:
-            b1_style_seg: Tensor = F.softmax(self._style_seg_disc(s1_detach), dim=1).gather(dim=1, index=seg1.unsqueeze(1))
-            b2_style_seg: Tensor = F.softmax(self._style_seg_disc(s2_detach), dim=1).gather(dim=1, index=seg2.unsqueeze(1))
+            b1_style_seg: Tensor = F.softmax(self._style_seg_disc(s1_detach), dim=1)
+            b2_style_seg: Tensor = F.softmax(self._style_seg_disc(s2_detach), dim=1)
+            b1_style_seg_gather = b1_style_seg.gather(dim=1, index=seg1.unsqueeze(1))
+            b2_style_seg_gather = b2_style_seg.gather(dim=1, index=seg2.unsqueeze(1))
 
             loss_style_seg: Tensor = lambda_style_seg * (
-                    self._style_seg_criterion(b1_style_seg, torch.ones_like(b1_style_seg)) +
-                    self._style_seg_criterion(b2_style_seg, torch.ones_like(b2_style_seg))) / 2.
+                    self._style_seg_criterion(b1_style_seg_gather, torch.ones_like(b1_style_seg_gather)) +
+                    self._style_seg_criterion(b2_style_seg_gather, torch.ones_like(b2_style_seg_gather))) / 2.
             correct1: Tensor = b1_style_seg.argmax(dim=1) == seg1
             correct2: Tensor = b2_style_seg.argmax(dim=1) == seg2
             accuracy_style_seg: Tensor = (correct1.sum() + correct2.sum()) / float(torch.numel(correct1) +
