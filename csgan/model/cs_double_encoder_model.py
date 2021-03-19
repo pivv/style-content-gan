@@ -439,15 +439,18 @@ class CSDoubleEncoderModel(BaseModel):
         # 2-7. Identity Loss
 
         xp1_idt: Tensor = self._decoder(self._cs_to_latent(c1))
-        xp1_idt2: Tensor = self._decoder(self._cs_to_latent(c1, s1))
+        #xp1_idt2: Tensor = self._decoder(self._cs_to_latent(c1, s1))
         xp2_idt: Tensor = self._decoder(self._cs_to_latent(c2, s2))
 
         loss_idt: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_idt > 0:
             loss_idt: Tensor = lambda_idt * (
-                    (self._identity_criterion(xp1_idt, xp1[:, :3]) +
-                     self._identity_criterion(xp1_idt2, xp1[:, :3])) / 2. +
+                    self._identity_criterion(xp1_idt, xp1[:, :3]) +
                     self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
+            #loss_idt: Tensor = lambda_idt * (
+            #        (self._identity_criterion(xp1_idt, xp1[:, :3]) +
+            #         self._identity_criterion(xp1_idt2, xp1[:, :3])) / 2. +
+            #        self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
 
         # 2-8. Cycle Loss
 
