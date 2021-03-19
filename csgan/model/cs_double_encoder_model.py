@@ -396,9 +396,9 @@ class CSDoubleEncoderModel(BaseModel):
 
         loss_source_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_source > 0:
-            #xp21_detach: Tensor = self._decoder(self._cs_to_latent(c2).detach())
-            #b2_source: Tensor = self._source_disc(xp21_detach)
-            b2_source: Tensor = self._source_disc(xp21)
+            xp21_detach: Tensor = self._decoder(self._cs_to_latent(c2).detach())
+            b2_source: Tensor = self._source_disc(xp21_detach)
+            #b2_source: Tensor = self._source_disc(xp21)
 
             loss_source_encoder: Tensor = lambda_source * gamma_source * (
                     self._source_criterion(b2_source, torch.ones_like(b2_source))) / 2.
@@ -407,9 +407,9 @@ class CSDoubleEncoderModel(BaseModel):
 
         loss_reference_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_reference > 0:
-            #xp12_detach: Tensor = self._decoder(self._cs_to_latent(c1, s2).detach())
-            #b2_reference: Tensor = self._reference_disc(xp12_detach)
-            b2_reference: Tensor = self._reference_disc(xp12)
+            xp12_detach: Tensor = self._decoder(self._cs_to_latent(c1, s2).detach())
+            b2_reference: Tensor = self._reference_disc(xp12_detach)
+            #b2_reference: Tensor = self._reference_disc(xp12)
 
             loss_reference_encoder: Tensor = lambda_reference * gamma_reference * (
                 self._reference_criterion(b2_reference, torch.ones_like(b2_reference))) / 2.
