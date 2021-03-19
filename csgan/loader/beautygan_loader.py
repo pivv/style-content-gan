@@ -39,8 +39,13 @@ class BeautyganDataset(Dataset):
         makeup_name: str = np.random.choice(self._makeup_names)
         non_makeup_image: np.ndarray = cv2.imread(os.path.join(self._non_makeup_dir, non_makeup_name))
         makeup_image: np.ndarray = cv2.imread(os.path.join(self._makeup_dir, makeup_name))
+
         non_makeup_seg: np.ndarray = cv2.imread(os.path.join(self._non_makeup_seg_dir, non_makeup_name), cv2.IMREAD_UNCHANGED)
         makeup_seg: np.ndarray = cv2.imread(os.path.join(self._makeup_seg_dir, makeup_name), cv2.IMREAD_UNCHANGED)
+        if len(non_makeup_seg.shape) == 3:
+            non_makeup_seg = non_makeup_seg[:, :, 0]
+        if len(makeup_seg.shape) == 3:
+            makeup_seg = makeup_seg[:, :, 0]
 
         non_makeup_image = cv2.resize(non_makeup_image, (self._image_size, self._image_size),
                                       interpolation=cv2.INTER_CUBIC)
