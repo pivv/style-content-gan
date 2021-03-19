@@ -637,7 +637,7 @@ class CSDoubleEconderBeautyganModel(CSDoubleEncoderModel):
         #    nn.Conv2d(128, 15, kernel_size=7, stride=1, padding=3, bias=True))
         style_seg_disc: nn.Module = nn.Sequential(
             nn.Linear(style_dim, 32*32, bias=True), View((-1, 1, 32, 32)),
-            nn.Conv2d(latent_dim, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(1, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
