@@ -436,9 +436,9 @@ class CSDoubleEncoderModel(BaseModel):
 
         loss_siamese: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_siamese > 0:
-            #loss_siamese: Tensor = lambda_siamese * (s1 * s1).mean()
+            loss_siamese: Tensor = lambda_siamese * (s1 * s1).mean()
             #loss_siamese: Tensor = lambda_siamese * (s1.abs().mean() + self._siamese_criterion(s2, margin=1.)) / 2.
-            loss_siamese: Tensor = lambda_siamese * ((s1 * s1).mean() + self._siamese_criterion(s2, margin=1.)) / 2.
+            #loss_siamese: Tensor = lambda_siamese * ((s1 * s1).mean() + self._siamese_criterion(s2, margin=1.)) / 2.
         norm_s1: Tensor = torch.sqrt((s1 * s1).flatten(start_dim=1).mean(dim=1)).mean()
         norm_s2: Tensor = torch.sqrt((s2 * s2).flatten(start_dim=1).mean(dim=1)).mean()
 
