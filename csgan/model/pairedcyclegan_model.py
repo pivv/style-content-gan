@@ -101,7 +101,9 @@ class PairedCycleGanModel(BaseModel):
     def _post_processing(self, batch: Dict[str, Tensor], params: Dict[str, Any],
                          global_step: int = 0) -> None:
         if global_step == 1 or global_step % params['sampling_interval'] == 0:
-            output: Dict[str, Tensor] = self._predict(batch)
+            self.eval()
+            with torch.no_grad():
+                output: Dict[str, Tensor] = self._predict(batch)
             result_dir = os.path.join(params['run_dir'], 'results')
 
             fig = plt.figure(figsize=(20, 15))

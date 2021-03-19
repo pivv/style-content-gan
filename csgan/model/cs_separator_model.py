@@ -123,7 +123,9 @@ class CSSeparatorModel(BaseModel):
     def _post_processing(self, batch: Dict[str, Tensor], params: Dict[str, Any],
                          global_step: int = 0) -> None:
         if global_step == 1 or global_step % params['sampling_interval'] == 0:
-            output: Dict[str, Tensor] = self._predict(batch)
+            self.eval()
+            with torch.no_grad():
+                output: Dict[str, Tensor] = self._predict(batch)
             result_dir = os.path.join(params['run_dir'], 'results')
 
             fig = plt.figure(figsize=(20, 20))
@@ -185,8 +187,8 @@ class CSSeparatorModel(BaseModel):
         # Weight Cycle Loss
         c1_detach, s1_detach = self._latent_to_cs(z1.detach())
         c2_detach, s2_detach = self._latent_to_cs(z2.detach())
-        c2_idt, s1_idt = self._latent_to_cs(c1_detach + s2_detach)
-        c1_idt, s2_idt = self._latent_to_cs(c2_detach + s1_detach)
+        c1_idt, s2_idt = self._latent_to_cs(c1_detach + s2_detach)
+        c2_idt, s1_idt = self._latent_to_cs(c2_detach + s1_detach)
 
         # Content Disc Loss
         b1_content: Tensor = self._content_disc(c1.detach())

@@ -45,6 +45,8 @@ class BaseModel(nn.Module):
 
     def _batch_wrapper(self, fn, data: DataLoader, params: Dict[str, Any] = None,
                        global_step: int = 0) -> Tuple[Dict[str, Tensor], Dict[str, Tensor]]:
+        self.eval()
+
         batches: Dict[str, List[Tensor]] = defaultdict(list)
         outputs: Dict[str, List[Tensor]] = defaultdict(list)
         for batch in data:
@@ -154,7 +156,9 @@ class BaseModel(nn.Module):
     def predict_one(self, input: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
         batch: Dict[str, Tensor] = {key: torch.FloatTensor(value).unsqueeze(0).to(self._device) for
                                     key, value in input.items()}
-        output: Dict[str, Tensor] = self._predict(batch)
+        self.eval()
+        with torch.no_grad():
+            output: Dict[str, Tensor] = self._predict(batch)
         output: Dict[str, np.ndarray] = {key: value.squeeze(0).detach().cpu().numpy() for
                                          key, value in output.items()}
         return output
