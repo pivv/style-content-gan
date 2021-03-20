@@ -331,7 +331,7 @@ class CSBasicMnistModel(CSBasicModel):
         self.apply(weights_init_resnet)
 
 
-class CSDoubleEconderBeautyganModel(CSBasicModel):
+class CSBasicBeautyganModel(CSBasicModel):
     def __init__(self, device) -> None:
         dimension = 2
         in_channels = 3
