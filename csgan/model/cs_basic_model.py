@@ -119,7 +119,7 @@ class CSBasicModel(BaseModel):
             result_dir = os.path.join(params['run_dir'], 'results')
 
             m: int = 4
-            n: int = min(8, len(batch['x1']))
+            n: int = min(6, len(batch['x1']))
             fig = plt.figure(figsize=(10., 10.*float(n)/4.))
             for index in range(n):
                 ax = fig.add_subplot(n, m, m*index+1)
