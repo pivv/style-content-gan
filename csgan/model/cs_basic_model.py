@@ -50,11 +50,11 @@ class CSBasicModel(BaseModel):
         self._scaler = scaler
 
         self._identity_criterion = nn.L1Loss()
-        self._content_criterion = nn.BCEWithLogitsLoss()
-        #self._content_criterion = nn.MSELoss()
+        #self._content_criterion = nn.BCEWithLogitsLoss()
+        self._content_criterion = nn.MSELoss()
 
-        self._source_criterion = nn.BCEWithLogitsLoss()
-        #self._source_criterion = nn.MSELoss()
+        #self._source_criterion = nn.BCEWithLogitsLoss()
+        self._source_criterion = nn.MSELoss()
 
         self.to(self._device)
 
