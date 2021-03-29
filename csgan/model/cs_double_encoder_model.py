@@ -36,10 +36,12 @@ from csgan.deep.norm import spectral_norm
 
 
 class CSDoubleEncoderModel(BaseModel):
-    def __init__(self, device, content_encoder: nn.Module, style_encoder: nn.Module, decoder: nn.Module,
+    def __init__(self, device,
+                 content_encoder: nn.Module, style_encoder: nn.Module, decoder: nn.Module,
                  content_disc: nn.Module, style_disc: nn.Module,
                  source_disc: nn.Module, reference_disc: nn.Module,
                  content_seg_disc: nn.Module, style_seg_disc: nn.Module,
+                 compatible_disc: nn.Module,
                  scaler: Scaler = None) -> None:
         super().__init__(device)
         self._content_encoder: nn.Module = content_encoder
@@ -54,16 +56,20 @@ class CSDoubleEncoderModel(BaseModel):
         self._content_seg_disc: nn.Module = content_seg_disc
         self._style_seg_disc: nn.Module = style_seg_disc
 
+        self._compatible_disc: nn.Module = compatible_disc
+
         if scaler is None:
             scaler = Scaler(1., 0.)
         self._scaler = scaler
 
         self._identity_criterion = nn.L1Loss()
         self._cycle_criterion = nn.L1Loss()
+
         self._content_criterion = nn.BCEWithLogitsLoss()
         self._style_criterion = nn.BCEWithLogitsLoss()
         #self._content_criterion = nn.MSELoss()
         #self._style_criterion = nn.MSELoss()
+
         self._siamese_criterion = SiameseLoss()
         #self._siamese_criterion = L1SiameseLoss()
 
@@ -71,8 +77,12 @@ class CSDoubleEncoderModel(BaseModel):
         self._reference_criterion = nn.BCEWithLogitsLoss()
         #self._source_criterion = nn.MSELoss()
         #self._reference_criterion = nn.MSELoss()
+
         self._content_seg_criterion = nn.BCELoss()
         self._style_seg_criterion = nn.BCELoss()
+
+        self._compatible_criterion = nn.BCEWithLogitsLoss()
+        #self._compatible_criterion = nn.MSELoss()
 
         self.to(self._device)
 
@@ -104,7 +114,8 @@ class CSDoubleEncoderModel(BaseModel):
                             module in [self._content_encoder, self._style_encoder, self._decoder,
                                        self._content_disc, self._style_disc,
                                        self._source_disc, self._reference_disc,
-                                       self._content_seg_disc, self._style_seg_disc]]
+                                       self._content_seg_disc, self._style_seg_disc,
+                                       self._compatible_disc]]
         self._schedulers = [optim.lr_scheduler.ExponentialLR(optimizer, gamma=gamma) if
                             optimizer is not None else None for optimizer in self._optimizers]
 
@@ -183,7 +194,8 @@ class CSDoubleEncoderModel(BaseModel):
         (optimizer_content_encoder, optimizer_style_encoder, optimizer_decoder,
          optimizer_content_disc, optimizer_style_disc,
          optimizer_source_disc, optimizer_reference_disc,
-         optimizer_content_seg_disc, optimizer_style_seg_disc) = self._optimizers
+         optimizer_content_seg_disc, optimizer_style_seg_disc,
+         optimizer_compatible_disc) = self._optimizers
 
         # 0. Parameters
         lambda_idt: float = params['lambda_identity']
@@ -197,13 +209,17 @@ class CSDoubleEncoderModel(BaseModel):
         lambda_content_seg: float = params['lambda_content_seg']
         lambda_style_seg: float = params['lambda_style_seg']
 
-        gamma_content = params['gamma_content']
-        gamma_style = params['gamma_style']
+        lambda_compatible: float = params['lambda_compatible']
 
-        gamma_source = params['gamma_source']
-        gamma_reference = params['gamma_reference']
-        gamma_content_seg = params['gamma_content_seg']
-        gamma_style_seg = params['gamma_style_seg']
+        gamma_content: float = params['gamma_content']
+        gamma_style: float = params['gamma_style']
+
+        gamma_source: float = params['gamma_source']
+        gamma_reference: float = params['gamma_reference']
+        gamma_content_seg: float = params['gamma_content_seg']
+        gamma_style_seg: float = params['gamma_style_seg']
+
+        gamma_compatible: float = params['gamma_compatible']
 
         xp1: Tensor = self._scaler.scaling(batch['x1']).detach()
         xp2: Tensor = self._scaler.scaling(batch['x2']).detach()
@@ -359,10 +375,50 @@ class CSDoubleEncoderModel(BaseModel):
             loss_style_seg.backward()
             optimizer_style_seg_disc.step()
 
+        # 1-7. Compatibility Loss
+
+        loss_compatible: Tensor = torch.FloatTensor([0.])[0].to(self._device)
+        accuracy_compatible: Tensor = torch.FloatTensor([0.5])[0].to(self._device)
+        if lambda_compatible > 0:
+            with torch.no_grad():
+                z1_detach: Tensor = self._cs_to_latent(c1_detach).detach()
+                #z1_detach: Tensor = self._cs_to_latent(c1_detach, s1_detach).detach()
+                z2_detach: Tensor = self._cs_to_latent(c2_detach, s2_detach).detach()
+                z12_detach: Tensor = self._cs_to_latent(c1_detach, s2_detach).detach()
+                z21_detach: Tensor = self._cs_to_latent(c2_detach).detach()
+                #z21_detach: Tensor = self._cs_to_latent(c2_detach, s1_detach).detach()
+            b1_compatible: Tensor = self._compatible_disc(z1_detach)
+            b2_compatible: Tensor = self._compatible_disc(z2_detach)
+            b12_compatible: Tensor = self._compatible_disc(z12_detach)
+            b21_compatible: Tensor = self._compatible_disc(z21_detach)
+
+            loss_compatible: Tensor = lambda_compatible * (
+                    self._compatible_criterion(b1_compatible, torch.ones_like(b1_compatible)) +
+                    self._compatible_criterion(b2_compatible, torch.ones_like(b2_compatible)) +
+                    self._compatible_criterion(b12_compatible, torch.zeros_like(b12_compatible)) +
+                    self._compatible_criterion(b21_compatible, torch.zeros_like(b21_compatible))) / 4.
+            if isinstance(self._compatible_criterion, nn.BCEWithLogitsLoss):
+                correct1: Tensor = b1_compatible >= 0.
+                correct2: Tensor = b2_compatible >= 0.
+                correct12: Tensor = b12_compatible < 0.
+                correct21: Tensor = b21_compatible < 0.
+            else:
+                assert(isinstance(self._compatible_criterion, nn.MSELoss))
+                correct1: Tensor = b1_compatible >= 0.5
+                correct2: Tensor = b2_compatible >= 0.5
+                correct12: Tensor = b12_compatible < 0.5
+                correct21: Tensor = b21_compatible < 0.5
+            accuracy_compatible: Tensor = (correct1.sum() + correct2.sum() + correct12.sum() + correct21.sum()) / float(
+                len(b1_compatible) + len(b2_compatible) + len(b12_compatible) + len(b21_compatible))
+
+            optimizer_compatible_disc.zero_grad()
+            loss_compatible.backward()
+            optimizer_compatible_disc.step()
+
         # 2. Encoder Loss
 
         for module in [self._content_disc, self._style_disc, self._source_disc, self._reference_disc,
-                       self._content_seg_disc, self._style_seg_disc]:
+                       self._content_seg_disc, self._style_seg_disc, self._compatible_disc]:
             if module is not None:
                 module.requires_grad_(False)
 
@@ -436,7 +492,21 @@ class CSDoubleEncoderModel(BaseModel):
                     self._style_seg_criterion(b1_style_seg, torch.zeros_like(b1_style_seg)) +
                     self._style_seg_criterion(b2_style_seg, torch.zeros_like(b2_style_seg))) / 2.
 
-        # 2-7. Identity Loss
+        # 2-7. Compatibility Encoder Loss
+
+        loss_compatible_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
+        if lambda_compatible > 0:
+            z12: Tensor = self._cs_to_latent(c1.detach(), s2)
+            #z21_detach: Tensor = self._cs_to_latent(c2_detach).detach()
+            z21: Tensor = self._cs_to_latent(c2.detach(), s1)
+            b12_compatible: Tensor = self._compatible_disc(z12)
+            b21_compatible: Tensor = self._compatible_disc(z21)
+
+            loss_compatible_encoder: Tensor = lambda_compatible * gamma_compatible * (
+                    self._compatible_criterion(b12_compatible, torch.ones_like(b12_compatible)) +
+                    self._compatible_criterion(b21_compatible, torch.ones_like(b21_compatible))) / 2.
+
+        # 2-8. Identity Loss
 
         xp1_idt: Tensor = self._decoder(self._cs_to_latent(c1))
         #xp1_idt2: Tensor = self._decoder(self._cs_to_latent(c1, s1))
@@ -452,7 +522,7 @@ class CSDoubleEncoderModel(BaseModel):
             #         self._identity_criterion(xp1_idt2, xp1[:, :3])) / 2. +
             #        self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
 
-        # 2-8. Cycle Loss
+        # 2-9. Cycle Loss
 
         loss_cycle: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_cycle > 0:
@@ -463,7 +533,7 @@ class CSDoubleEncoderModel(BaseModel):
                     self._cycle_criterion(xp1_cycle, xp1[:, :3]) +
                     self._cycle_criterion(xp2_cycle, xp2[:, :3])) / 2.
 
-        # 2-9. Siamese Loss
+        # 2-10. Siamese Loss
 
         loss_siamese: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_siamese > 0:
@@ -476,6 +546,7 @@ class CSDoubleEncoderModel(BaseModel):
         loss: Tensor = (loss_content_encoder + loss_style_encoder +
                         loss_source_encoder + loss_reference_encoder +
                         loss_content_seg_encoder + loss_style_seg_encoder +
+                        loss_compatible_encoder +
                         loss_idt + loss_cycle + loss_siamese)
 
         optimizer_content_encoder.zero_grad()
@@ -487,7 +558,7 @@ class CSDoubleEncoderModel(BaseModel):
         optimizer_decoder.step()
 
         for module in [self._content_disc, self._style_disc, self._source_disc, self._reference_disc,
-                       self._content_seg_disc, self._style_seg_disc]:
+                       self._content_seg_disc, self._style_seg_disc, self._compatible_disc]:
             if module is not None:
                 module.requires_grad_(True)
 
@@ -500,6 +571,7 @@ class CSDoubleEncoderModel(BaseModel):
                                         'loss_reference': loss_reference, 'accuracy_reference': accuracy_reference,
                                         'loss_content_seg': loss_content_seg, 'accuracy_content_seg': accuracy_content_seg,
                                         'loss_style_seg': loss_style_seg, 'accuracy_style_seg': accuracy_style_seg,
+                                        'loss_compatible': loss_compatible, 'accuracy_compatible': accuracy_compatible,
 
                                         'loss_siamese': loss_siamese,
                                         'norm_s1': norm_s1, 'norm_s2': norm_s2}
@@ -518,26 +590,6 @@ class CSDoubleEconderMnistModel(CSDoubleEncoderModel):
         num_blocks = [4]
         planes = [64, 64]
 
-        #content_encoder: nn.Module = nn.Sequential(
-        #    nn.Conv2d(in_channels, planes[0], kernel_size=5, stride=1, padding=2, bias=False),
-        #    nn.InstanceNorm2d(planes[0], affine=True), nn.ReLU(), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-        #    simple_resnet(dimension, num_blocks, planes,
-        #                  transpose=False, norm='InstanceNorm', activation='ReLU', pool=False),
-        #    nn.Flatten(start_dim=1), nn.Linear(planes[-1]*7*7, content_dim))
-        #style_encoder: nn.Module = nn.Sequential(
-        #    nn.Conv2d(in_channels, planes[0], kernel_size=5, stride=1, padding=2, bias=False),
-        #    nn.InstanceNorm2d(planes[0], affine=True), nn.ReLU(), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
-        #    simple_resnet(dimension, num_blocks, planes,
-        #                  transpose=False, norm='InstanceNorm', activation='ReLU', pool=False),
-        #    nn.Flatten(start_dim=1), nn.Linear(planes[-1]*7*7, style_dim))
-        #decoder: nn.Module = nn.Sequential(
-        #    nn.Linear(latent_dim, planes[-1]*7*7), View((-1, planes[-1], 7, 7)),
-        #    simple_resnet(dimension, num_blocks, planes,
-        #                  transpose=True, norm='InstanceNorm', activation='ReLU', pool=False),
-        #    nn.ConvTranspose2d(planes[0], planes[0], kernel_size=3, stride=2, padding=1, output_padding=1, bias=False),
-        #    nn.InstanceNorm2d(planes[0], affine=True), nn.ReLU(),
-        #    nn.ConvTranspose2d(planes[0], in_channels, kernel_size=5, stride=1, padding=2, output_padding=0),
-        #    nn.Tanh())
         content_encoder: nn.Module = nn.Sequential(
             nn.Conv2d(in_channels, planes[0], kernel_size=5, stride=1, padding=2, bias=False),
             nn.InstanceNorm2d(planes[0], affine=True), nn.LeakyReLU(0.01), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
@@ -591,9 +643,13 @@ class CSDoubleEconderMnistModel(CSDoubleEncoderModel):
         #    nn.Flatten(), nn.Linear(7*7*128, 1, bias=True))
         content_seg_disc: nn.Module = None
         style_seg_disc: nn.Module = None
+        compatible_disc: nn.Module = nn.Sequential(
+            nn.Linear(latent_dim, 256, bias=False), nn.BatchNorm1d(256), nn.LeakyReLU(0.01),
+            nn.Linear(256, 64, bias=False), nn.BatchNorm1d(64), nn.LeakyReLU(0.01),
+            nn.Linear(64, 1, bias=True))
 
         super().__init__(device, content_encoder, style_encoder, decoder, content_disc, style_disc,
-                         source_disc, reference_disc, content_seg_disc, style_seg_disc,
+                         source_disc, reference_disc, content_seg_disc, style_seg_disc, compatible_disc,
                          scaler)
 
         self._content_dim = content_dim
@@ -689,10 +745,17 @@ class CSDoubleEconderBeautyganModel(CSDoubleEncoderModel):
             nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(128, 17, kernel_size=7, stride=1, padding=3, bias=True))
 
+        compatible_disc: nn.Module = nn.Sequential(
+            Permute((0, 3, 1, 2)),
+            nn.Conv2d(style_dim, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(256, 1, bias=True))
+
         scaler: Scaler = Scaler(2., 0.5)
 
         super().__init__(device, content_encoder, style_encoder, decoder, content_disc, style_disc,
-                         source_disc, reference_disc, content_seg_disc, style_seg_disc,
+                         source_disc, reference_disc, content_seg_disc, style_seg_disc, compatible_disc,
                          scaler)
 
         self._content_dim = content_dim
