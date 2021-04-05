@@ -26,10 +26,11 @@ sys.path.append(__ROOT_PATH)
 matplotlib.rcParams['figure.facecolor'] = 'w'
 
 os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 #os.environ["CUDA_VISIBLE_DEVICES"] = "0,1"
 
-from csgan.loader.style_dog_loader import StylingDogDataset
+#from csgan.loader.style_dog_loader import StylingDogDataset
+from csgan.loader.brighten_dog_loader import BrighteningDogDataset
 from csgan.model.cs_double_encoder_model import CSDoubleEnconderStylingDogModel
 
 #DATA_ROOT = os.path.join(__ROOT_PATH, "data/")
@@ -43,7 +44,7 @@ os.makedirs(run_dir, exist_ok=True)
 params = {'seed': 2222, 'num_epoch': 200, 'batch_size': 8, 'test_batch_size': 512,
         'learning_rate': 0.0002, 'beta1': 0.5, 'beta2': 0.999,
         'scheduler_gamma': 1., 'weight_decay': 0., #0.00001,
-        'lambda_identity': 5., 'lambda_cycle': 10., 'lambda_content': 0.01, 'lambda_style': 0.,
+        'lambda_identity': 10., 'lambda_cycle': 5., 'lambda_content': 0.01, 'lambda_style': 0.,
         'lambda_source': 0.1, 'lambda_reference': 0.1, 'lambda_content_seg': 0., 'lambda_style_seg': 0.,
         'lambda_compatible': 0.01, 'lambda_siamese': 0.,
         'gamma_content': 1., 'gamma_style': 1., 'gamma_source': 1., 'gamma_reference': 1.,
@@ -56,7 +57,7 @@ params = {'seed': 2222, 'num_epoch': 200, 'batch_size': 8, 'test_batch_size': 51
 with open (os.path.join(run_dir,'params.yaml'), 'w') as outfile:
     yaml.dump(params, outfile, default_flow_style=False)
 
-train_dataset = StylingDogDataset(root=DATA_ROOT, image_size=256)
+train_dataset = BrighteningDogDataset(root=DATA_ROOT, image_size=256)
 print(f"train data set: {len(train_dataset)}")
 
 train_loader = DataLoader(train_dataset, params['batch_size'], shuffle=True, drop_last=True)
