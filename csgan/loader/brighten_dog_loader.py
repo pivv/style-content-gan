@@ -19,7 +19,7 @@ from torch.utils.data import Dataset, DataLoader
 from csgan.util.io import read_image
 
 
-class StylingDogDataset(Dataset):
+class BrighteningDogDataset(Dataset):
     def __init__(self, root: str = '/data', dirname: str = 'stylingDog',
                     list_txt_dark: str = 'list_dark.txt', list_txt_bright: str = "list_bright.txt", 
                     image_size: int = 256) -> None:
