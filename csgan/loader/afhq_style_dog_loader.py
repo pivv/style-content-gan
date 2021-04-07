@@ -21,12 +21,14 @@ from csgan.util.io import read_image
 
 class StylingDogDataset(Dataset):
     def __init__(self, root: str = '/data', dirname: str = 'afhq',
-                    list_txt_white: str = 'white_dog.csv', image_size: int = 256) -> None:
+                    list_txt_white: str = 'white_dog.csv', 
+                    list_txt_white_val: str = 'white_dog_val.csv', 
+                    image_size: int = 256) -> None:
         self._image_size = image_size
         self._white_dog_dir: str = os.path.join(root, f"{dirname}/train/dog")
         self._style_dog_dir: str = self._white_dog_dir
         
-        with open(os.path.join(root, f'{dirname}/{list_txt_white}'), 'r') as f:
+        with open(os.path.join(root, f'{dirname}/{list_txt_white}'), 'r', encoding='utf-8-sig') as f:
             self._white_dog_names: List[str] = f.read().splitlines()
         
         all_image_names: str = os.listdir(self._white_dog_dir)
@@ -48,6 +50,7 @@ class StylingDogDataset(Dataset):
         except: 
             print(f"[DEBUG] {os.path.join(self._white_dog_dir, white_dog_name)}")
             print(f"[DEBUG] {os.path.join(self._style_dog_dir, style_dog_name)}")
+            print(f"[DEBUG] {white_dog_image.shape}")
 
         white_dog_image = cv2.cvtColor(white_dog_image, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.
         style_dog_image = cv2.cvtColor(style_dog_image, cv2.COLOR_BGR2RGB).astype(np.float32) / 255.
