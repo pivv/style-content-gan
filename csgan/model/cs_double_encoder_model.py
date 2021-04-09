@@ -140,14 +140,14 @@ class CSDoubleEncoderModel(BaseModel):
             s2: Tensor = self._style_encoder(xp2)
             z1: Tensor = self._cs_to_latent(c1, s1)
             z2: Tensor = self._cs_to_latent(c2, s2)
-            x1_idt: Tensor = self._scaler.unscaling(self._decoder(self._cs_to_latent(c1)) + xp1) #added residual
-            x2_idt: Tensor = self._scaler.unscaling(self._decoder(self._cs_to_latent(c2, s2)) + xp2) #added residual
-            xp12: Tensor = self._decoder(self._cs_to_latent(c1, s2)) + xp1 #added residual
-            xp21: Tensor = self._decoder(self._cs_to_latent(c2)) + xp2 #added residual
+            x1_idt: Tensor = self._scaler.unscaling(self._decoder(self._cs_to_latent(c1)) + xp1)  # added residual
+            x2_idt: Tensor = self._scaler.unscaling(self._decoder(self._cs_to_latent(c2, s2)) + xp2)  # added residual
+            xp12: Tensor = self._decoder(self._cs_to_latent(c1, s2)) + xp1  # added residual
+            xp21: Tensor = self._decoder(self._cs_to_latent(c2)) + xp2  # added residual
             x12: Tensor = self._scaler.unscaling(xp12)
             x21: Tensor = self._scaler.unscaling(xp21)
-            x1_cycle: Tensor = self._scaler.unscaling(self._decoder(self._cs_to_latent(self._content_encoder(xp12))) + xp12) #added residual
-            x2_cycle: Tensor = self._scaler.unscaling(self._decoder(self._cs_to_latent(self._content_encoder(xp21), s2)) + xp21) #added residual
+            x1_cycle: Tensor = self._scaler.unscaling(self._decoder(self._cs_to_latent(self._content_encoder(xp12))) + xp12)  # added residual
+            x2_cycle: Tensor = self._scaler.unscaling(self._decoder(self._cs_to_latent(self._content_encoder(xp21), s2)) + xp21)  # added residual
             output: Dict[str, Tensor] = {'z1': z1, 'z2': z2, 's1': s1, 's2': s2, 'c1': c1, 'c2': c2,
                                          'x1_idt': x1_idt, 'x2_idt': x2_idt, 'x12': x12, 'x21': x21,
                                          'x1_cycle': x1_cycle, 'x2_cycle': x2_cycle}
@@ -578,7 +578,7 @@ class CSDoubleEncoderModel(BaseModel):
         return loss_dict
 
 
-class CSDoubleEconderMnistModel(CSDoubleEncoderModel):
+class CSDoubleEncoderMnistModel(CSDoubleEncoderModel):
     def __init__(self, device) -> None:
         dimension = 2
         in_channels = 3
@@ -785,7 +785,7 @@ class CSDoubleEnconderStylingDogModel(CSDoubleEncoderModel):
 #==================================================================================================
 
 
-class CSDoubleEconderBeautyganModel(CSDoubleEncoderModel):
+class CSDoubleEncoderBeautyganModel(CSDoubleEncoderModel):
     def __init__(self, device) -> None:
         dimension = 2
         in_channels = 3

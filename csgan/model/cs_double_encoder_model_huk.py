@@ -578,7 +578,7 @@ class CSDoubleEncoderModel(BaseModel):
         return loss_dict
 
 
-class CSDoubleEconderMnistModel(CSDoubleEncoderModel):
+class CSDoubleEncoderMnistModel(CSDoubleEncoderModel):
     def __init__(self, device) -> None:
         dimension = 2
         in_channels = 3
@@ -690,7 +690,8 @@ class CSDoubleEnconderStylingDogModel(CSDoubleEncoderModel):
             nn.InstanceNorm2d(planes[0], affine=True), nn.LeakyReLU(0.01), nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
             simple_resnet(dimension, num_blocks, planes,
                           transpose=False, norm='InstanceNorm', activation='LeakyReLU', pool=False),
-            Permute((0, 2, 3, 1)), nn.Linear(planes[-1], style_dim))
+            nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(planes[-1], style_dim))
+            #Permute((0, 2, 3, 1)), nn.Linear(planes[-1], style_dim))
             #nn.Flatten(), nn.Linear(32*32*planes[-1], style_dim))
         decoder: nn.Module = nn.Sequential(
             nn.Linear(latent_dim, planes[-1]), Permute((0, 3, 1, 2)),
@@ -707,11 +708,10 @@ class CSDoubleEnconderStylingDogModel(CSDoubleEncoderModel):
             nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(256, 1, bias=True))
         style_disc: nn.Module = nn.Sequential(
-            Permute((0, 3, 1, 2)),
-            nn.Conv2d(style_dim, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
-            nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(256, 1, bias=True))
+            #nn.Dropout(p=0.5, inplace=False),
+            spectral_norm(nn.Linear(style_dim, 256, bias=False)), nn.LeakyReLU(0.01),
+            spectral_norm(nn.Linear(256, 64, bias=False)), nn.LeakyReLU(0.01),
+            nn.Linear(64, 1, bias=True))
 
         source_disc: nn.Module = nn.Sequential(
             nn.Conv2d(in_channels, 64, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(64, affine=True), nn.LeakyReLU(0.01),
@@ -730,26 +730,12 @@ class CSDoubleEnconderStylingDogModel(CSDoubleEncoderModel):
             nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=False), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(256, 1, bias=True))
 
-        content_seg_disc: nn.Module = nn.Sequential(
-            Permute((0, 3, 1, 2)),
-            nn.Conv2d(content_dim, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
-            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(128, 17, kernel_size=7, stride=1, padding=3, bias=True))
-        style_seg_disc: nn.Module = nn.Sequential(
-            Permute((0, 3, 1, 2)),
-            nn.Conv2d(style_dim, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
-            #nn.Linear(style_dim, 32*32, bias=True), View((-1, 1, 32, 32)),
-            #nn.Conv2d(1, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(256, 256, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
-            nn.ConvTranspose2d(256, 128, kernel_size=3, stride=2, padding=1, output_padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(128, 128, kernel_size=3, stride=1, padding=1, bias=True), nn.InstanceNorm2d(128, affine=True), nn.LeakyReLU(0.01),
-            nn.Conv2d(128, 17, kernel_size=7, stride=1, padding=3, bias=True))
+        content_seg_disc: nn.Module = None
+        style_seg_disc: nn.Module = None
 
         compatible_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
-            nn.Conv2d(style_dim, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(latent_dim, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(256, 1, bias=True))
@@ -766,8 +752,8 @@ class CSDoubleEnconderStylingDogModel(CSDoubleEncoderModel):
 
     def _cs_to_latent(self, c: Tensor, s: Tensor = None) -> Tensor:
         if s is None:
-            s = torch.zeros((len(c), 32, 32, self._style_dim)).to(self._device)
-        z: Tensor = c + s
+            s = torch.zeros((len(c), self._style_dim)).to(self._device)
+        z: Tensor = c + s.unsqueeze(1).unsqueeze(1)
         #z: Tensor = torch.cat([c, s.view((-1, 1, 1, self._style_dim)).expand((-1, 32, 32, -1))], dim=-1)
         #z: Tensor = torch.cat([c, s], dim=-1)
         return z
@@ -776,7 +762,7 @@ class CSDoubleEnconderStylingDogModel(CSDoubleEncoderModel):
 #==================================================================================================
 
 
-class CSDoubleEconderBeautyganModel(CSDoubleEncoderModel):
+class CSDoubleEncoderBeautyganModel(CSDoubleEncoderModel):
     def __init__(self, device) -> None:
         dimension = 2
         in_channels = 3
@@ -859,7 +845,7 @@ class CSDoubleEconderBeautyganModel(CSDoubleEncoderModel):
 
         compatible_disc: nn.Module = nn.Sequential(
             Permute((0, 3, 1, 2)),
-            nn.Conv2d(style_dim, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
+            nn.Conv2d(latent_dim, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.Conv2d(256, 256, kernel_size=4, stride=2, padding=1, bias=True), nn.InstanceNorm2d(256, affine=True), nn.LeakyReLU(0.01),
             nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(256, 1, bias=True))
