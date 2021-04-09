@@ -17,7 +17,7 @@ from torch.utils.data import Dataset, DataLoader
 
 class ColoredMnistDataset(Dataset):
     def __init__(self, data: dict = None, root: str = '',
-                 dirname: str='colored_mnist', train: bool = True) -> None:
+                 dirname: str = 'colored_mnist', train: bool = True) -> None:
         if data is None:
             assert root
             data = dict(np.load(os.path.join(root, dirname, f"{'train' if train else 'test'}.npz")))
@@ -35,7 +35,7 @@ class ColoredMnistDataset(Dataset):
                 'y1': torch.LongTensor([self._data['label'][index]])[0],
                 'y2': torch.LongTensor([self._data['label'][self._colored_indices[index]]])[0],
                 'c1': torch.FloatTensor([0., 0., 0.]),
-                'c2': torch.FloatTensor(list(self._data['color'][self._colored_indices[index]])) / 255.}
+                'c2': torch.FloatTensor(list(self._data['white_color'][self._colored_indices[index]])) / 255.}
 
     def __len__(self) -> int:
         return len(self._data['label'])
