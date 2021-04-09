@@ -70,7 +70,6 @@ class BaseModel(nn.Module):
     def train_model(self, train_data: DataLoader, val_data: DataLoader = None, params: Dict[str, Any] = None,
                     optimizer=None, scheduler=None) -> None:
         torch.cuda.empty_cache()
-        np.random.seed(params['seed'])
 
         run_dir = params['run_dir']
         checkpoint_dir = os.path.join(run_dir, 'checkpoint')
