@@ -35,7 +35,9 @@ class ColoredMnistDataset(Dataset):
                 'y1': torch.LongTensor([self._data['label'][index]])[0],
                 'y2': torch.LongTensor([self._data['label'][self._colored_indices[index]]])[0],
                 'c1': torch.FloatTensor([0., 0., 0.]),
-                'c2': torch.FloatTensor(list(self._data['white_color'][self._colored_indices[index]])) / 255.}
+                'c2': (torch.FloatTensor(list(self._data['color'][self._colored_indices[index]])) / 255. if
+                       'color' in self._data else
+                       torch.FloatTensor(list(self._data['white_color'][self._colored_indices[index]])) / 255.)}
 
     def __len__(self) -> int:
         return len(self._data['label'])
