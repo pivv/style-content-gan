@@ -16,10 +16,11 @@ from torch.utils.data import Dataset, DataLoader
 
 
 class ColoredMnistDataset(Dataset):
-    def __init__(self, data: dict = None, root: str = '', train: bool = True) -> None:
+    def __init__(self, data: dict = None, root: str = '',
+                 dirname: str='colored_mnist', train: bool = True) -> None:
         if data is None:
             assert root
-            data = dict(np.load(os.path.join(root, f"colored_mnist/{'train' if train else 'test'}.npz")))
+            data = dict(np.load(os.path.join(root, dirname, f"{'train' if train else 'test'}.npz")))
         self._data = data
         self._colored_indices = np.arange(len(self))
         np.random.shuffle(self._colored_indices)
