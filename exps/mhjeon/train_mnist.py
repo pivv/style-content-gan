@@ -15,6 +15,8 @@ import copy
 
 import time
 
+import numpy as np
+
 import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
@@ -31,21 +33,21 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 #from csgan.loader.style_dog_loader import StylingDogDataset
 #from csgan.loader.brighten_dog_loader import BrighteningDogDataset
-from csgan.loader.afhq_style_dog_loader import StylingDogDataset
-from csgan.model.cs_double_encoder_model import CSDoubleEnconderStylingDogModel
+from csgan.loader.colored_mnist_loader import ColoredMnistDataset
+from csgan.model.cs_double_encoder_model import CSDoubleEncoderMnistModel
 
 #DATA_ROOT = os.path.join(__ROOT_PATH, "data/")
 DATA_ROOT = "/data/"
 RUN_ROOT = os.path.join(__ROOT_PATH, "runs/")
 
 now = time.localtime()
-run_dir = os.path.join(RUN_ROOT, f"afhq_stylingdog_sc_separate_{now.tm_hour}_{now.tm_min}/")
+run_dir = os.path.join(RUN_ROOT, f"colored_mnist_sc_separate_{now.tm_hour}_{now.tm_min}/")
 os.makedirs(run_dir, exist_ok=True)
 
-params = {'seed': 2222, 'num_epoch': 200, 'batch_size': 8, 'test_batch_size': 512,
+params = {'seed': 2222, 'num_epoch': 200, 'batch_size': 32, 'test_batch_size': 512,
         'learning_rate': 0.0002, 'beta1': 0.5, 'beta2': 0.999,
         'scheduler_gamma': 1., 'weight_decay': 0., #0.00001,
-        'lambda_identity': 5., 'lambda_cycle': 10., 'lambda_content': 0.01, 'lambda_style': 0.1,
+        'lambda_identity': 5., 'lambda_cycle': 10., 'lambda_content': 0.1, 'lambda_style': 0.1,
         'lambda_source': 0.1, 'lambda_reference': 0.1, 'lambda_content_seg': 0., 'lambda_style_seg': 0.,
         'lambda_compatible': 0.01, 'lambda_siamese': 0.,
         'gamma_content': 1., 'gamma_style': 1., 'gamma_source': 1., 'gamma_reference': 1.,
@@ -55,10 +57,13 @@ params = {'seed': 2222, 'num_epoch': 200, 'batch_size': 8, 'test_batch_size': 51
         'stopping_loss': 'loss',
         'run_dir': run_dir}
 
+torch.manual_seed(params['seed'])
+np.random.seed(params['seed'])
+
 with open (os.path.join(run_dir,'params.yaml'), 'w') as outfile:
     yaml.dump(params, outfile, default_flow_style=False)
 
-train_dataset = StylingDogDataset(root=DATA_ROOT, image_size=256)
+train_dataset = ColoredMnistDataset(root=DATA_ROOT, dirname = 'colored_mnist_bg')
 print(f"train data set: {len(train_dataset)}")
 
 train_loader = DataLoader(train_dataset, params['batch_size'], shuffle=True, drop_last=True)
@@ -66,6 +71,6 @@ print(f"train loader: {len(train_loader)}")
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-sc_model = CSDoubleEnconderStylingDogModel(device)
+sc_model = CSDoubleEncoderMnistModel(device)
 #sc_model.load(os.path.join(run_dir, 'best_model.pth.tar'))
 sc_model.train_model(train_loader, params=params)
