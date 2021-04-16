@@ -514,10 +514,10 @@ class CSDoubleEncoderModel(BaseModel):
 
         loss_idt: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_idt > 0:
-            loss_idt: Tensor = lambda_idt * self._identity_criterion(xp1_idt, xp1[:, :3])
-            #loss_idt: Tensor = lambda_idt * (
-            #        self._identity_criterion(xp1_idt, xp1[:, :3]) +
-            #        self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
+            #loss_idt: Tensor = lambda_idt * self._identity_criterion(xp1_idt, xp1[:, :3])
+            loss_idt: Tensor = lambda_idt * (
+                    self._identity_criterion(xp1_idt, xp1[:, :3]) +
+                    self._identity_criterion(xp2_idt, xp2[:, :3])) / 2.
             #loss_idt: Tensor = lambda_idt * (
             #        (self._identity_criterion(xp1_idt, xp1[:, :3]) +
             #         self._identity_criterion(xp1_idt2, xp1[:, :3])) / 2. +
