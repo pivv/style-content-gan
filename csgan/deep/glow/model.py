@@ -15,14 +15,14 @@ logabs = lambda x: torch.log(torch.abs(x))
 
 
 class ActNorm(nn.Module):
-    def __init__(self, in_channel, logdet=True):
+    def __init__(self, in_channel, log_det=True):
         super().__init__()
 
         self.loc = nn.Parameter(torch.zeros(1, in_channel, 1, 1))
         self.scale = nn.Parameter(torch.ones(1, in_channel, 1, 1))
 
         self.register_buffer("initialized", torch.tensor(0, dtype=torch.uint8))
-        self.logdet = logdet
+        self.log_det = log_det
 
     def initialize(self, input):
         with torch.no_grad():
@@ -54,10 +54,10 @@ class ActNorm(nn.Module):
 
         log_abs = logabs(self.scale)
 
-        logdet = height * width * torch.sum(log_abs)
+        log_det = height * width * torch.sum(log_abs)
 
-        if self.logdet:
-            return self.scale * (input + self.loc), logdet
+        if self.log_det:
+            return self.scale * (input + self.loc), log_det
 
         else:
             return self.scale * (input + self.loc)
@@ -79,11 +79,11 @@ class InvConv2d(nn.Module):
         _, _, height, width = input.shape
 
         out = F.conv2d(input, self.weight)
-        logdet = (
+        log_det = (
                 height * width * torch.slogdet(self.weight.squeeze().double())[1].float()
         )
 
-        return out, logdet
+        return out, log_det
 
     def reverse(self, output):
         return F.conv2d(
@@ -123,9 +123,9 @@ class InvConv2dLU(nn.Module):
         weight = self.calc_weight()
 
         out = F.conv2d(input, weight)
-        logdet = height * width * torch.sum(self.w_s)
+        log_det = height * width * torch.sum(self.w_s)
 
-        return out, logdet
+        return out, log_det
 
     def calc_weight(self):
         weight = (
@@ -189,14 +189,14 @@ class AffineCoupling(nn.Module):
             # out_a = s * in_a + t
             out_b = (in_b + t) * s
 
-            logdet = torch.sum(torch.log(s).view(input.shape[0], -1), 1)
+            log_det = torch.sum(torch.log(s).view(input.shape[0], -1), 1)
 
         else:
             net_out = self.net(in_a)
             out_b = in_b + net_out
-            logdet = None
+            log_det = None
 
-        return torch.cat([in_a, out_b], 1), logdet
+        return torch.cat([in_a, out_b], 1), log_det
 
     def reverse(self, output):
         out_a, out_b = output.chunk(2, 1)
@@ -230,15 +230,15 @@ class Flow(nn.Module):
         self.coupling = AffineCoupling(in_channel, affine=affine)
 
     def forward(self, input):
-        out, logdet = self.actnorm(input)
+        out, log_det = self.actnorm(input)
         out, det1 = self.invconv(out)
         out, det2 = self.coupling(out)
 
-        logdet = logdet + det1
+        log_det = log_det + det1
         if det2 is not None:
-            logdet = logdet + det2
+            log_det = log_det + det2
 
-        return out, logdet
+        return out, log_det
 
     def reverse(self, output):
         input = self.coupling.reverse(output)
@@ -280,11 +280,26 @@ class Block(nn.Module):
         squeezed = squeezed.permute(0, 1, 3, 5, 2, 4)
         out = squeezed.contiguous().view(b_size, n_channel * 4, height // 2, width // 2)
 
-        logdet = 0
+        for flow in self.flows:
+            out, _ = flow(out)
 
+        if self.split:
+            out, z_new = out.chunk(2, 1)
+        else:
+            z_new = out
+
+        return out, z_new
+
+    def forward_with_loss(self, input):
+        b_size, n_channel, height, width = input.shape
+        squeezed = input.view(b_size, n_channel, height // 2, 2, width // 2, 2)
+        squeezed = squeezed.permute(0, 1, 3, 5, 2, 4)
+        out = squeezed.contiguous().view(b_size, n_channel * 4, height // 2, width // 2)
+
+        log_det = 0
         for flow in self.flows:
             out, det = flow(out)
-            logdet = logdet + det
+            log_det = log_det + det
 
         if self.split:
             out, z_new = out.chunk(2, 1)
@@ -293,13 +308,13 @@ class Block(nn.Module):
             log_p = log_p.view(b_size, -1).sum(1)
 
         else:
+            z_new = out
             zero = torch.zeros_like(out)
             mean, log_sd = self.prior(zero).chunk(2, 1)
             log_p = gaussian_log_p(out, mean, log_sd)
             log_p = log_p.view(b_size, -1).sum(1)
-            z_new = out
 
-        return out, logdet, log_p, z_new
+        return out, log_det, log_p, z_new
 
     def reverse(self, output, eps=None, reconstruct=False):
         input = output
@@ -307,16 +322,13 @@ class Block(nn.Module):
         if reconstruct:
             if self.split:
                 input = torch.cat([output, eps], 1)
-
             else:
                 input = eps
-
         else:
             if self.split:
                 mean, log_sd = self.prior(input).chunk(2, 1)
                 z = gaussian_sample(eps, mean, log_sd)
                 input = torch.cat([output, z], 1)
-
             else:
                 zero = torch.zeros_like(input)
                 # zero = F.pad(zero, [1, 1, 1, 1], value=1)
@@ -340,14 +352,13 @@ class Block(nn.Module):
 
 class Glow(nn.Module):
     def __init__(
-            self, img_size, in_channel, n_flow, n_block, n_bits, affine=True, conv_lu=True
+            self, img_size, in_channel, n_flow, n_block, affine=True, conv_lu=True
     ):
         super().__init__()
         self._img_size = img_size
         self._in_channel = in_channel
         self._n_flow = n_flow
         self._n_block = n_block
-        self._n_bits = n_bits
 
         self.blocks = nn.ModuleList()
         n_channel = in_channel
@@ -357,41 +368,48 @@ class Glow(nn.Module):
         self.blocks.append(Block(n_channel, n_flow, split=False, affine=affine))
 
     def forward(self, input):
+        out = input
+        z_outs = []
+        for block in self.blocks:
+            out, z_new = block.forward(out)
+            z_outs.append(z_new)
+        return z_outs
+
+    def forward_with_loss(self, input):
         log_p_sum = 0
-        logdet = 0
+        log_det = 0
         out = input
         z_outs = []
 
         for block in self.blocks:
-            out, det, log_p, z_new = block(out)
+            out, det, log_p, z_new = block.forward_with_loss(out)
             z_outs.append(z_new)
-            logdet = logdet + det
+            log_det = log_det + det
 
             if log_p is not None:
                 log_p_sum = log_p_sum + log_p
 
-        return log_p_sum, logdet, z_outs
+        return z_outs, log_p_sum, log_det
 
     def reverse(self, z_list, reconstruct=False):
+        input = None
         for i, block in enumerate(self.blocks[::-1]):
             if i == 0:
                 input = block.reverse(z_list[-1], z_list[-1], reconstruct=reconstruct)
 
             else:
                 input = block.reverse(input, z_list[-(i + 1)], reconstruct=reconstruct)
-
         return input
 
-    def loss_function(self, input: Tensor) -> Tuple[Tensor, Tensor, Tensor]:
-        n_bins = 2.0 ** self._n_bits
-        input = input * 255.
-        if self._n_bits < 8:
-            input = torch.floor(input / 2 ** (8 - self._n_bits))
-        input = input / n_bins - 0.5
+    def loss_function(self, z_list, log_p, log_det) -> Tuple[Tensor, Tensor, Tensor]:
+        #n_bins = 2.0 ** self._n_bits
+        #input = input * 255.
+        #if self._n_bits < 8:
+        #    input = torch.floor(input / 2 ** (8 - self._n_bits))
+        #input = input / n_bins - 0.5
+        #_, log_p, log_det = self.forward_with_loss(input + torch.rand_like(input) / n_bins)
 
-        log_p, logdet, _ = self.forward(input + torch.rand_like(input) / n_bins)
-        logdet = logdet.mean()
-        return calc_loss(log_p, logdet, self._img_size, n_bins)
+        return calc_loss(log_p, log_det, self._img_size)
 
     def sample(self, n_sample: int = 1, temperature: float = 0.7) -> Tensor:
         z_sample = []
@@ -419,15 +437,13 @@ def calc_z_shapes(n_channel, input_size, n_flow, n_block):
     return z_shapes
 
 
-def calc_loss(log_p, logdet, image_size, n_bins):
+def calc_loss(log_p, log_det, image_size):
     # log_p = calc_log_p([z_list])
     n_pixel = image_size * image_size * 3
-
-    loss = -log(n_bins) * n_pixel
-    loss = loss + logdet + log_p
+    loss = log_det + log_p
 
     return (
         (-loss / (log(2) * n_pixel)).mean(),
         (log_p / (log(2) * n_pixel)).mean(),
-        (logdet / (log(2) * n_pixel)).mean(),
+        (log_det / (log(2) * n_pixel)).mean(),
     )

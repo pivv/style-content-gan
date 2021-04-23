@@ -9,6 +9,27 @@ from torch import nn
 from torch.nn import functional as F
 
 
+class ListMSELoss(nn.modules.loss._Loss):
+    __constants__ = ['reduction']
+
+    def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
+        super().__init__(size_average, reduce, reduction)
+
+    def forward(self, input: List[Tensor], target: List[Tensor] = None) -> Tensor:
+        if target is not None:
+            input = [input_one - target_one for input_one, target_one in zip(input, target)]
+        output: Tensor = sum((input_one * input_one).flatten(start_dim=1).sum(dim=1) for input_one in input) / sum(
+            input_one.flatten(start_dim=1).size(1) for input_one in input)
+        if self.reduction is 'none':
+            pass
+        elif self.reduction is 'mean':
+            output = output.mean()
+        else:
+            assert(self.reduction is 'sum')
+            output = output.sum()
+        return output
+
+
 class SiameseLoss(nn.modules.loss._Loss):
     __constants__ = ['reduction']
 
