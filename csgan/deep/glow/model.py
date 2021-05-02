@@ -223,7 +223,6 @@ class Flow(nn.Module):
 
         if conv_lu:
             self.invconv = InvConv2dLU(in_channel)
-
         else:
             self.invconv = InvConv2d(in_channel)
 

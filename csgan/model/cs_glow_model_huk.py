@@ -115,8 +115,8 @@ class CSGlowModel(BaseModel):
             z2: List[Tensor] = self._glow(xp2)
             c1, s1 = self._latent_to_cs(z1)
             c2, s2 = self._latent_to_cs(z2)
-            x1_idt: Tensor = self._scaler.unscaling(self._glow.reverse(self._cs_to_latent(c1), reconstruct=True))
-            x2_idt: Tensor = self._scaler.unscaling(self._glow.reverse(self._cs_to_latent(c2, s2), reconstruct=True))
+            x1_idt: Tensor = self._scaler.unscaling(self._glow.reverse(z1, reconstruct=True))
+            x2_idt: Tensor = self._scaler.unscaling(self._glow.reverse(z2, reconstruct=True))
             xp12: Tensor = self._glow.reverse(self._cs_to_latent(c1, s2), reconstruct=True)
             xp21: Tensor = self._glow.reverse(self._cs_to_latent(c2), reconstruct=True)
             x12: Tensor = self._scaler.unscaling(xp12)
@@ -407,7 +407,7 @@ class CSGlowMnistModel(CSGlowModel):
         n_flow = 32
         n_block = 2
 
-        glow: Glow = Glow(img_size, in_channel, n_flow, n_block, affine=True, conv_lu=True)
+        glow: Glow = Glow(img_size, in_channel, n_flow, n_block, affine=True, conv_lu=False)
 
         style_w: nn.Module = BlockwiseWeight(img_size, in_channel, n_block)
         content_disc: nn.Module = PyramidDiscriminator(img_size, in_channel, n_block)
