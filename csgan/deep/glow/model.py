@@ -185,7 +185,7 @@ class AffineCoupling(nn.Module):
         if self.affine:
             log_s, t = self.net(in_a).chunk(2, 1)
             # s = torch.exp(log_s)
-            s = F.sigmoid(log_s + 2)
+            s = torch.sigmoid(log_s + 2)
             # out_a = s * in_a + t
             out_b = (in_b + t) * s
 
@@ -204,7 +204,7 @@ class AffineCoupling(nn.Module):
         if self.affine:
             log_s, t = self.net(out_a).chunk(2, 1)
             # s = torch.exp(log_s)
-            s = F.sigmoid(log_s + 2)
+            s = torch.sigmoid(log_s + 2)
             # in_a = (out_a - t) / s
             in_b = out_b / s - t
 
@@ -410,12 +410,12 @@ class Glow(nn.Module):
 
         return calc_loss(log_p, log_det, self._img_size)
 
-    def sample(self, n_sample: int = 1, temperature: float = 0.7) -> Tensor:
+    def sample(self, n_sample: int = 1, temperature: float = 0.7, device=None) -> Tensor:
         z_sample = []
         z_shapes = calc_z_shapes(self._in_channel, self._img_size, self._n_flow, self._n_block)
         for z in z_shapes:
             z_new = torch.randn(n_sample, *z) * temperature
-            z_sample.append(z_new.to(self.device))
+            z_sample.append(z_new.to(device))
 
         return self.reverse(z_sample)
 

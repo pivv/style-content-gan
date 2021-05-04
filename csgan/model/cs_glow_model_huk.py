@@ -38,22 +38,23 @@ from csgan.deep.glow.model import Glow
 
 class CSGlowModel(BaseModel):
     def __init__(self, device,
-                 glow: Glow, style_w: nn.Module, content_disc: nn.Module, compatible_disc: nn.Module,
+                 glow: Glow, style_w: nn.Module, content_disc: nn.Module, style_disc: nn.Module,
                  scaler: Scaler = None) -> None:
         super().__init__(device)
         self._glow: Glow = glow
         self._style_w: nn.Module = style_w
         self._content_disc: nn.Module = content_disc
-        self._compatible_disc: nn.Module = compatible_disc
+        self._style_disc: nn.Module = style_disc
 
         if scaler is None:
             scaler = Scaler(1., 0.)
         self._scaler = scaler
 
+        self._identity_criterion = nn.L1Loss()
         self._weight_cycle_criterion = ListMSELoss()
 
         self._content_criterion = nn.BCEWithLogitsLoss()
-        self._compatible_criterion = nn.BCEWithLogitsLoss()
+        self._style_criterion = nn.BCEWithLogitsLoss()
 
         self._siamese_criterion = SiameseLoss()
 
@@ -85,14 +86,14 @@ class CSGlowModel(BaseModel):
         self._optimizers = [optim.Adam(module.parameters(), lr, (beta1, beta2), weight_decay=weight_decay) if
                             module is not None else None for
                             module in [self._glow, self._style_w,
-                                       self._content_disc, self._compatible_disc]]
+                                       self._content_disc, self._style_disc]]
         self._schedulers = [optim.lr_scheduler.ExponentialLR(optimizer, gamma=gamma) if
                             optimizer is not None else None for optimizer in self._optimizers]
 
     @abstractmethod
     def _latent_to_cs(self, z: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
-        s: List[Tensor] = self._style_w(z)
-        c: List[Tensor] = [z_one - s_one for s_one, z_one in zip(s, z)]
+        c: List[Tensor] = self._style_w(z)
+        s: List[Tensor] = [z_one - c_one for c_one, z_one in zip(c, z)]
         return c, s
 
     @abstractmethod
@@ -115,19 +116,29 @@ class CSGlowModel(BaseModel):
             z2: List[Tensor] = self._glow(xp2)
             c1, s1 = self._latent_to_cs(z1)
             c2, s2 = self._latent_to_cs(z2)
-            x1_idt: Tensor = self._scaler.unscaling(self._glow.reverse(z1, reconstruct=True))
-            x2_idt: Tensor = self._scaler.unscaling(self._glow.reverse(z2, reconstruct=True))
+            xp1_idt: Tensor = self._glow.reverse(z1, reconstruct=True)
+            xp2_idt: Tensor = self._glow.reverse(z2, reconstruct=True)
+            x1_idt: Tensor = torch.clip(self._scaler.unscaling(xp1_idt), 0., 1.)
+            x2_idt: Tensor = torch.clip(self._scaler.unscaling(xp2_idt), 0., 1.)
+            #print(xp2)
+            #print(xp2_idt)
+            #assert(0 == 1)
             xp12: Tensor = self._glow.reverse(self._cs_to_latent(c1, s2), reconstruct=True)
             xp21: Tensor = self._glow.reverse(self._cs_to_latent(c2), reconstruct=True)
-            x12: Tensor = self._scaler.unscaling(xp12)
-            x21: Tensor = self._scaler.unscaling(xp21)
-            x1_cycle: Tensor = self._scaler.unscaling(self._glow.reverse(self._cs_to_latent(self._glow(xp12)),
-                                                                         reconstruct=True))
-            x2_cycle: Tensor = self._scaler.unscaling(self._glow.reverse(self._cs_to_latent(self._glow(xp21), s2),
-                                                                         reconstruct=True))
+            x12: Tensor = torch.clip(self._scaler.unscaling(xp12), 0., 1.)
+            x21: Tensor = torch.clip(self._scaler.unscaling(xp21), 0., 1.)
+            c12, s12 = self._latent_to_cs(self._glow(xp12))
+            c21, s21 = self._latent_to_cs(self._glow(xp21))
+            xp1_cycle: Tensor = self._glow.reverse(self._cs_to_latent(c12), reconstruct=True)
+            xp2_cycle: Tensor = self._glow.reverse(self._cs_to_latent(c21, s2), reconstruct=True)
+            x1_cycle: Tensor = torch.clip(self._scaler.unscaling(xp1_cycle), 0., 1.)
+            x2_cycle: Tensor = torch.clip(self._scaler.unscaling(xp2_cycle), 0., 1.)
+            xp_sample: Tensor = self._glow.sample(len(batch['x1']), device=batch['x1'].device)
+            x_sample: Tensor = torch.clip(self._scaler.unscaling(xp_sample), 0., 1.)
             output: Dict[str, Tensor or List[Tensor]] = {'z1': z1, 'z2': z2, 's1': s1, 's2': s2, 'c1': c1, 'c2': c2,
                                                          'x1_idt': x1_idt, 'x2_idt': x2_idt, 'x12': x12, 'x21': x21,
-                                                         'x1_cycle': x1_cycle, 'x2_cycle': x2_cycle}
+                                                         'x1_cycle': x1_cycle, 'x2_cycle': x2_cycle,
+                                                         'x_sample': x_sample}
         return output
 
     def _post_processing(self, batch: Dict[str, Tensor], params: Dict[str, Any],
@@ -138,25 +149,28 @@ class CSGlowModel(BaseModel):
                 output: Dict[str, Tensor or List[Tensor]] = self._predict(batch)
             result_dir = os.path.join(params['run_dir'], 'results')
 
-            n: int = min(8, len(batch['x1']))
-            fig = plt.figure(figsize=(20., 20.*float(n)/8.))
+            m = 9
+            n: int = min(m, len(batch['x1']))
+            fig = plt.figure(figsize=(20., 20.*float(n)/float(m)))
             for index in range(n):
-                ax = fig.add_subplot(n, 8, 8*index+1)
+                ax = fig.add_subplot(n, m, m*index+1)
                 ax.imshow(batch['x1'][index, :3].detach().cpu().numpy().transpose(1, 2, 0))
-                ax = fig.add_subplot(n, 8, 8*index+2)
+                ax = fig.add_subplot(n, m, m*index+2)
                 ax.imshow(batch['x2'][index, :3].detach().cpu().numpy().transpose(1, 2, 0))
-                ax = fig.add_subplot(n, 8, 8*index+3)
+                ax = fig.add_subplot(n, m, m*index+3)
                 ax.imshow(output['x1_idt'][index].detach().cpu().numpy().transpose(1, 2, 0))
-                ax = fig.add_subplot(n, 8, 8*index+4)
+                ax = fig.add_subplot(n, m, m*index+4)
                 ax.imshow(output['x2_idt'][index].detach().cpu().numpy().transpose(1, 2, 0))
-                ax = fig.add_subplot(n, 8, 8*index+5)
+                ax = fig.add_subplot(n, m, m*index+5)
                 ax.imshow(output['x12'][index].detach().cpu().numpy().transpose(1, 2, 0))
-                ax = fig.add_subplot(n, 8, 8*index+6)
+                ax = fig.add_subplot(n, m, m*index+6)
                 ax.imshow(output['x21'][index].detach().cpu().numpy().transpose(1, 2, 0))
-                ax = fig.add_subplot(n, 8, 8*index+7)
+                ax = fig.add_subplot(n, m, m*index+7)
                 ax.imshow(output['x1_cycle'][index].detach().cpu().numpy().transpose(1, 2, 0))
-                ax = fig.add_subplot(n, 8, 8*index+8)
+                ax = fig.add_subplot(n, m, m*index+8)
                 ax.imshow(output['x2_cycle'][index].detach().cpu().numpy().transpose(1, 2, 0))
+                ax = fig.add_subplot(n, m, m*index+9)
+                ax.imshow(output['x_sample'][index].detach().cpu().numpy().transpose(1, 2, 0))
 
             plt.savefig(os.path.join(result_dir, f"sampling_{global_step}.png"), dpi=200, bbox_inches='tight')
             plt.close('all')
@@ -169,20 +183,31 @@ class CSGlowModel(BaseModel):
     def loss_function(self, batch: Dict[str, Tensor], output: Dict[str, Tensor], params: Dict[str, Any],
                       global_step: int = 0, **kwargs) -> Dict[str, Tensor]:
         (optimizer_glow, optimizer_style_w,
-         optimizer_content_disc, optimizer_compatible_disc) = self._optimizers
+         optimizer_content_disc, optimizer_style_disc) = self._optimizers
 
         # 0. Parameters
+        n_bits: int = params['n_bits']
+        n_bins = 2.0 ** n_bits
+
+        lambda_identity: float = params['lambda_identity']
         lambda_glow: float = params['lambda_glow']
         lambda_weight_cycle: float = params['lambda_weight_cycle']
         lambda_content: float = params['lambda_content']
         lambda_siamese: float = params['lambda_siamese']
-        lambda_compatible: float = params['lambda_compatible']
+        lambda_style: float = params['lambda_style']
 
         gamma_content: float = params['gamma_content']
-        gamma_compatible: float = params['gamma_compatible']
+        gamma_style: float = params['gamma_style']
 
-        xp1: Tensor = self._scaler.scaling(batch['x1']).detach()
-        xp2: Tensor = self._scaler.scaling(batch['x2']).detach()
+        x1: Tensor = batch['x1']
+        x2: Tensor = batch['x2']
+
+        if n_bits < 8:
+            x1 = torch.floor(x1 * n_bins) / n_bins
+            x2 = torch.floor(x2 * n_bins) / n_bins
+
+        xp1: Tensor = (self._scaler.scaling(x1) + torch.rand_like(x1) / n_bins).detach()
+        xp2: Tensor = (self._scaler.scaling(x2) + torch.rand_like(x2) / n_bins).detach()
 
         # 1. Disc Loss
 
@@ -222,44 +247,48 @@ class CSGlowModel(BaseModel):
             loss_content.backward()
             optimizer_content_disc.step()
 
-        # 1-2. Compatibility Loss
+        # 1-2. Style Loss
 
-        loss_compatible: Tensor = torch.FloatTensor([0.])[0].to(self._device)
-        accuracy_compatible: Tensor = torch.FloatTensor([0.5])[0].to(self._device)
-        if lambda_compatible > 0:
+        loss_style: Tensor = torch.FloatTensor([0.])[0].to(self._device)
+        accuracy_style: Tensor = torch.FloatTensor([0.5])[0].to(self._device)
+        if lambda_style > 0:
             with torch.no_grad():
                 z12_detach: List[Tensor] = self._cs_to_latent(c1_detach, s2_detach)
-                #z21_detach: List[Tensor] = self._cs_to_latent(c2_detach)
-                z21_detach: List[Tensor] = self._cs_to_latent(c2_detach, s1_detach)
-            b1_compatible: Tensor = self._compatible_disc(z1_detach)
-            b2_compatible: Tensor = self._compatible_disc(z2_detach)
-            b12_compatible: Tensor = self._compatible_disc(z12_detach)
-            b21_compatible: Tensor = self._compatible_disc(z21_detach)
+            b2_style: Tensor = self._style_disc(z2_detach)
+            b12_style: Tensor = self._style_disc(z12_detach)
 
-            loss_compatible = lambda_compatible * (
-                    self._compatible_criterion(b1_compatible, torch.ones_like(b1_compatible)) +
-                    self._compatible_criterion(b2_compatible, torch.ones_like(b2_compatible)) +
-                    self._compatible_criterion(b12_compatible, torch.zeros_like(b12_compatible)) +
-                    self._compatible_criterion(b21_compatible, torch.zeros_like(b21_compatible))) / 4.
-            if isinstance(self._compatible_criterion, nn.BCEWithLogitsLoss):
-                correct1: Tensor = b1_compatible >= 0.
-                correct2: Tensor = b2_compatible >= 0.
-                correct12: Tensor = b12_compatible < 0.
-                correct21: Tensor = b21_compatible < 0.
+            loss_style = lambda_style * (
+                    self._style_criterion(b2_style, torch.ones_like(b2_style)) +
+                    self._style_criterion(b12_style, torch.zeros_like(b12_style))) / 2.
+            if isinstance(self._style_criterion, nn.BCEWithLogitsLoss):
+                correct1: Tensor = b2_style >= 0.
+                correct2: Tensor = b12_style < 0.
             else:
-                assert(isinstance(self._compatible_criterion, nn.MSELoss))
-                correct1: Tensor = b1_compatible >= 0.5
-                correct2: Tensor = b2_compatible >= 0.5
-                correct12: Tensor = b12_compatible < 0.5
-                correct21: Tensor = b21_compatible < 0.5
-            accuracy_compatible = (correct1.sum() + correct2.sum() + correct12.sum() + correct21.sum()) / float(
-                len(b1_compatible) + len(b2_compatible) + len(b12_compatible) + len(b21_compatible))
+                assert(isinstance(self._style_criterion, nn.MSELoss))
+                correct1: Tensor = b2_style >= 0.5
+                correct2: Tensor = b12_style < 0.5
+            accuracy_style = (correct1.sum() + correct2.sum()) / float(len(b2_style) + len(b12_style))
 
-            optimizer_compatible_disc.zero_grad()
-            loss_compatible.backward()
-            optimizer_compatible_disc.step()
+            optimizer_style_disc.zero_grad()
+            loss_style.backward()
+            optimizer_style_disc.step()
 
-        # 2. Weight Cycle Loss
+        # 2. Weight Loss
+
+        for module in [self._content_disc, self._style_disc]:
+            if module is not None:
+                module.requires_grad_(False)
+
+        # 2-1. Weight Identity Loss
+
+        #xp1_idt: Tensor = self._glow.reverse(c1, reconstruct=True)
+
+        #loss_identity: Tensor = torch.FloatTensor([0.])[0].to(self._device)
+        #if lambda_identity > 0:
+        #    loss_identity: Tensor = lambda_identity * self._identity_criterion(xp1_idt, xp1)
+        #print(loss_identity)
+
+        # 2-2. Weight Cycle Loss
 
         c1_idt, s2_idt = self._latent_to_cs(self._cs_to_latent(c1, s2))
         c2_idt, s1_idt = self._latent_to_cs(self._cs_to_latent(c2, s1))
@@ -269,13 +298,12 @@ class CSGlowModel(BaseModel):
                     self._weight_cycle_criterion(c1_idt, c1_detach) + self._weight_cycle_criterion(c2_idt, c2_detach) +
                     self._weight_cycle_criterion(s1_idt, s1_detach) + self._weight_cycle_criterion(s2_idt, s2_detach)) / 4.
 
-        optimizer_style_w.zero_grad()
-        loss_weight_cycle.backward()
-        optimizer_style_w.step()
+            #loss_weight: Tensor = (loss_identity + loss_weight_cycle)
+            loss_weight: Tensor = (loss_weight_cycle)
 
-        for module in [self._content_disc, self._compatible_disc]:
-            if module is not None:
-                module.requires_grad_(False)
+            optimizer_style_w.zero_grad()
+            loss_weight.backward()
+            optimizer_style_w.step()
 
         # 3. Encoder Loss
 
@@ -285,15 +313,24 @@ class CSGlowModel(BaseModel):
         c1, s1 = self._latent_to_cs(z1)
         c2, s2 = self._latent_to_cs(z2)
 
-        # 3-1. Glow Loss
+        ## 3-1. Identity Loss
+
+        xp1_idt: Tensor = self._glow.reverse(c1, reconstruct=True)
+
+        loss_identity: Tensor = torch.FloatTensor([0.])[0].to(self._device)
+        if lambda_identity > 0:
+            loss_identity: Tensor = lambda_identity * self._identity_criterion(xp1_idt, xp1)
+        #print(loss_identity)
+
+        # 3-2. Glow Loss
 
         loss_glow: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_glow > 0:
             loss_glow1, _, _ = self._glow.loss_function(z1, log_p1, log_det1)
             loss_glow2, _, _ = self._glow.loss_function(z2, log_p2, log_det2)
-            loss_glow = lambda_glow * (loss_glow1 + loss_glow2) / 2.
+            loss_glow = lambda_glow * (np.log(n_bins) / np.log(2) + (loss_glow1 + loss_glow2) / 2.)
 
-        # 3-2. Content Encoder Loss
+        # 3-3. Content Encoder Loss
 
         loss_content_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_content > 0:
@@ -301,21 +338,18 @@ class CSGlowModel(BaseModel):
             loss_content_encoder = lambda_content * gamma_content * (
                 self._content_criterion(b2_content, torch.ones_like(b2_content)))
 
-        # 3-3. Compatibility Encoder Loss
+        # 3-4. Style Encoder Loss
 
-        loss_compatible_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
-        if lambda_compatible > 0:
-            z12: List[Tensor] = self._cs_to_latent(c1_detach, s2)
-            #z21: List[Tensor] = self._cs_to_latent(c2_detach)
-            z21: List[Tensor] = self._cs_to_latent(c2_detach, s1)
-            b12_compatible: Tensor = self._compatible_disc(z12)
-            b21_compatible: Tensor = self._compatible_disc(z21)
+        loss_style_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
+        if lambda_style > 0:
+            z12: List[Tensor] = self._cs_to_latent(c1, s2)
+            #z12: List[Tensor] = self._cs_to_latent(c1_detach, s2)
+            b12_style: Tensor = self._style_disc(z12)
 
-            loss_compatible_encoder = lambda_compatible * gamma_compatible * (
-                    self._compatible_criterion(b12_compatible, torch.ones_like(b12_compatible)) +
-                    self._compatible_criterion(b21_compatible, torch.ones_like(b21_compatible))) / 2.
+            loss_style_encoder = lambda_style * gamma_style * (
+                self._style_criterion(b12_style, torch.ones_like(b12_style)))
 
-        # 3-4. Siamese Loss
+        # 3-5. Siamese Loss
 
         loss_siamese: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         squared_norm_s1: Tensor = sum((s1_one * s1_one).flatten(start_dim=1).sum(dim=1) for s1_one in s1) / sum(
@@ -327,7 +361,8 @@ class CSGlowModel(BaseModel):
         norm_s1: Tensor = torch.sqrt(squared_norm_s1).mean()
         norm_s2: Tensor = torch.sqrt(squared_norm_s2).mean()
 
-        loss: Tensor = (loss_glow + loss_content_encoder + loss_compatible_encoder + loss_siamese)
+        #loss: Tensor = (loss_identity + loss_glow + loss_content_encoder + loss_style_encoder + loss_siamese)
+        loss: Tensor = (loss_glow + loss_content_encoder + loss_style_encoder + loss_siamese)
 
         optimizer_glow.zero_grad()
         optimizer_style_w.zero_grad()
@@ -335,13 +370,14 @@ class CSGlowModel(BaseModel):
         optimizer_glow.step()
         optimizer_style_w.step()
 
-        for module in [self._content_disc, self._compatible_disc]:
+        for module in [self._content_disc, self._style_disc]:
             if module is not None:
                 module.requires_grad_(True)
 
-        loss_dict: Dict[str, Tensor] = {'loss': loss, 'loss_glow': loss_glow, 'loss_weight_cycle': loss_weight_cycle,
+        loss_dict: Dict[str, Tensor] = {'loss': loss, 'loss_identity': loss_identity,
+                                        'loss_glow': loss_glow, 'loss_weight_cycle': loss_weight_cycle,
                                         'loss_content': loss_content, 'accuracy_content': accuracy_content,
-                                        'loss_compatible': loss_compatible, 'accuracy_compatible': accuracy_compatible,
+                                        'loss_style': loss_style, 'accuracy_style': accuracy_style,
                                         'loss_siamese': loss_siamese, 'norm_s1': norm_s1, 'norm_s2': norm_s2}
         return loss_dict
 
@@ -407,16 +443,19 @@ class CSGlowMnistModel(CSGlowModel):
         n_flow = 32
         n_block = 2
 
-        glow: Glow = Glow(img_size, in_channel, n_flow, n_block, affine=True, conv_lu=False)
+        glow: Glow = Glow(img_size, in_channel, n_flow, n_block, affine=False, conv_lu=False)
 
         style_w: nn.Module = BlockwiseWeight(img_size, in_channel, n_block)
         content_disc: nn.Module = PyramidDiscriminator(img_size, in_channel, n_block)
-        compatible_disc: nn.Module = PyramidDiscriminator(img_size, in_channel, n_block)
-        scaler: Scaler = Scaler(2., 0.5)
+        style_disc: nn.Module = PyramidDiscriminator(img_size, in_channel, n_block)
+        scaler: Scaler = Scaler(1., 0.5)
 
-        super().__init__(device, glow, style_w, content_disc, compatible_disc, scaler)
+        style_w.apply(weights_init_resnet)
+        content_disc.apply(weights_init_resnet)
+        style_disc.apply(weights_init_resnet)
+
+        super().__init__(device, glow, style_w, content_disc, style_disc, scaler)
 
         self._content_dim = content_dim
         self._style_dim = style_dim
-        self.apply(weights_init_resnet)
 
