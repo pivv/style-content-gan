@@ -55,6 +55,8 @@ class CSGlowModel(BaseModel):
 
         self._content_criterion = nn.BCEWithLogitsLoss()
         self._style_criterion = nn.BCEWithLogitsLoss()
+        #self._content_criterion = nn.MSELoss()
+        #self._style_criterion = nn.MSELoss()
 
         self._siamese_criterion = SiameseLoss()
 
@@ -65,17 +67,16 @@ class CSGlowModel(BaseModel):
         pass
 
     def _update_schedulers(self, params: Dict[str, Any], global_step: int = 0) -> None:
-        if global_step % params['scheduler_interval'] == 0:
+        if global_step > 0:
             for scheduler in self._schedulers:
                 if scheduler is not None:
                     scheduler.step()
 
-        if global_step == 1 or global_step % params['scheduler_interval'] == 0:
-            assert(self._schedulers[0] is not None)
-            lr = self._schedulers[0].get_last_lr()
-            print("")
-            print(f"Learning with learning rate: {lr[0]: .8f}.")
-            print("")
+        assert(self._schedulers[0] is not None)
+        lr = self._schedulers[0].get_last_lr()
+        print("")
+        print(f"Learning with learning rate: {lr[0]: .8f}.")
+        print("")
 
     def _set_optimizers(self, params: Dict[str, Any]) -> None:
         lr: float = params['learning_rate']
@@ -90,13 +91,11 @@ class CSGlowModel(BaseModel):
         self._schedulers = [optim.lr_scheduler.ExponentialLR(optimizer, gamma=gamma) if
                             optimizer is not None else None for optimizer in self._optimizers]
 
-    @abstractmethod
     def _latent_to_cs(self, z: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
-        c: List[Tensor] = self._style_w(z)
-        s: List[Tensor] = [z_one - c_one for c_one, z_one in zip(c, z)]
+        s: List[Tensor] = self._style_w(z)
+        c: List[Tensor] = [z_one - s_one for s_one, z_one in zip(s, z)]
         return c, s
 
-    @abstractmethod
     def _cs_to_latent(self, c: List[Tensor], s: List[Tensor] = None) -> List[Tensor]:
         if s is None:
             return c
@@ -116,21 +115,21 @@ class CSGlowModel(BaseModel):
             z2: List[Tensor] = self._glow(xp2)
             c1, s1 = self._latent_to_cs(z1)
             c2, s2 = self._latent_to_cs(z2)
-            xp1_idt: Tensor = self._glow.reverse(z1, reconstruct=True)
-            xp2_idt: Tensor = self._glow.reverse(z2, reconstruct=True)
+            xp1_idt: Tensor = self._glow.reverse(z1)
+            xp2_idt: Tensor = self._glow.reverse(z2)
             x1_idt: Tensor = torch.clip(self._scaler.unscaling(xp1_idt), 0., 1.)
             x2_idt: Tensor = torch.clip(self._scaler.unscaling(xp2_idt), 0., 1.)
             #print(xp2)
             #print(xp2_idt)
             #assert(0 == 1)
-            xp12: Tensor = self._glow.reverse(self._cs_to_latent(c1, s2), reconstruct=True)
-            xp21: Tensor = self._glow.reverse(self._cs_to_latent(c2), reconstruct=True)
+            xp12: Tensor = self._glow.reverse(self._cs_to_latent(c1, s2))
+            xp21: Tensor = self._glow.reverse(self._cs_to_latent(c2))
             x12: Tensor = torch.clip(self._scaler.unscaling(xp12), 0., 1.)
             x21: Tensor = torch.clip(self._scaler.unscaling(xp21), 0., 1.)
             c12, s12 = self._latent_to_cs(self._glow(xp12))
             c21, s21 = self._latent_to_cs(self._glow(xp21))
-            xp1_cycle: Tensor = self._glow.reverse(self._cs_to_latent(c12), reconstruct=True)
-            xp2_cycle: Tensor = self._glow.reverse(self._cs_to_latent(c21, s2), reconstruct=True)
+            xp1_cycle: Tensor = self._glow.reverse(self._cs_to_latent(c12))
+            xp2_cycle: Tensor = self._glow.reverse(self._cs_to_latent(c21, s2))
             x1_cycle: Tensor = torch.clip(self._scaler.unscaling(xp1_cycle), 0., 1.)
             x2_cycle: Tensor = torch.clip(self._scaler.unscaling(xp2_cycle), 0., 1.)
             xp_sample: Tensor = self._glow.sample(len(batch['x1']), device=batch['x1'].device)
@@ -229,8 +228,12 @@ class CSGlowModel(BaseModel):
         loss_content: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         accuracy_content: Tensor = torch.FloatTensor([0.5])[0].to(self._device)
         if lambda_content > 0:
+            #print(c1_detach[-1])
+            #print(c2_detach[-1])
             b1_content: Tensor = self._content_disc(c1_detach)
             b2_content: Tensor = self._content_disc(c2_detach)
+            #print(b1_content)
+            #print(b2_content)
 
             loss_content = lambda_content * (self._content_criterion(b1_content, torch.ones_like(b1_content)) +
                                              self._content_criterion(b2_content, torch.zeros_like(b2_content))) / 2.
@@ -281,7 +284,7 @@ class CSGlowModel(BaseModel):
 
         # 2-1. Weight Identity Loss
 
-        #xp1_idt: Tensor = self._glow.reverse(c1, reconstruct=True)
+        #xp1_idt: Tensor = self._glow.reverse(c1)
 
         #loss_identity: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         #if lambda_identity > 0:
@@ -315,7 +318,7 @@ class CSGlowModel(BaseModel):
 
         ## 3-1. Identity Loss
 
-        xp1_idt: Tensor = self._glow.reverse(c1, reconstruct=True)
+        xp1_idt: Tensor = self._glow.reverse(c1)
 
         loss_identity: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_identity > 0:
@@ -352,17 +355,19 @@ class CSGlowModel(BaseModel):
         # 3-5. Siamese Loss
 
         loss_siamese: Tensor = torch.FloatTensor([0.])[0].to(self._device)
-        squared_norm_s1: Tensor = sum((s1_one * s1_one).flatten(start_dim=1).sum(dim=1) for s1_one in s1) / sum(
-            s1_one.flatten(start_dim=1).size(1) for s1_one in s1)
-        squared_norm_s2: Tensor = sum((s2_one * s2_one).flatten(start_dim=1).sum(dim=1) for s2_one in s2) / sum(
-            s2_one.flatten(start_dim=1).size(1) for s2_one in s2)
+        squared_norm_s1: Tensor = sum((s1_one * s1_one).flatten(start_dim=1).mean(dim=1) for s1_one in s1) / float(len(s1))
+        squared_norm_s2: Tensor = sum((s2_one * s2_one).flatten(start_dim=1).mean(dim=1) for s2_one in s2) / float(len(s2))
+        #squared_norm_s1: Tensor = sum((s1_one * s1_one).flatten(start_dim=1).sum(dim=1) for s1_one in s1) / sum(
+        #    s1_one.flatten(start_dim=1).size(1) for s1_one in s1)
+        #squared_norm_s2: Tensor = sum((s2_one * s2_one).flatten(start_dim=1).sum(dim=1) for s2_one in s2) / sum(
+        #    s2_one.flatten(start_dim=1).size(1) for s2_one in s2)
         if lambda_siamese > 0:
             loss_siamese = lambda_siamese * squared_norm_s1.mean()
         norm_s1: Tensor = torch.sqrt(squared_norm_s1).mean()
         norm_s2: Tensor = torch.sqrt(squared_norm_s2).mean()
 
         #loss: Tensor = (loss_identity + loss_glow + loss_content_encoder + loss_style_encoder + loss_siamese)
-        loss: Tensor = (loss_glow + loss_content_encoder + loss_style_encoder + loss_siamese)
+        loss: Tensor = (loss_identity + loss_glow + loss_content_encoder + loss_style_encoder + loss_siamese)
 
         optimizer_glow.zero_grad()
         optimizer_style_w.zero_grad()
@@ -392,8 +397,9 @@ class BlockwiseWeight(nn.Module):
                 cur_in_channel *= 2
             else:
                 cur_in_channel *= 4
-            pad: int = 2 ** (n_block - 1 - iblock)
-            conv = nn.Conv2d(cur_in_channel, cur_in_channel, kernel_size=pad*2+1, stride=1, padding=pad, bias=False)
+            #pad: int = 2 ** (n_block - 1 - iblock)
+            #conv = nn.Conv2d(cur_in_channel, cur_in_channel, kernel_size=pad*2+1, stride=1, padding=pad, bias=False)
+            conv = nn.Conv2d(cur_in_channel, cur_in_channel, kernel_size=1, stride=1, padding=0, bias=False)
             self._conv_list.append(conv)
 
     def forward(self, z: List[Tensor]) -> List[Tensor]:
@@ -413,13 +419,18 @@ class PyramidDiscriminator(nn.Module):
             else:
                 cur_in_channel *= 4
             layer = nn.Sequential(
-                nn.Conv2d(last_in_channel + cur_in_channel, cur_in_channel*2, kernel_size=4, stride=2, padding=1, bias=False),
-                nn.InstanceNorm2d(cur_in_channel*2, affine=True), nn.LeakyReLU(0.01))
+                nn.Conv2d(last_in_channel + cur_in_channel, cur_in_channel*2, kernel_size=3, stride=1, padding=1, bias=False),
+                #nn.InstanceNorm2d(cur_in_channel*2, affine=True),
+                nn.LeakyReLU(0.01),
+                nn.Conv2d(cur_in_channel*2, cur_in_channel*2, kernel_size=4, stride=2, padding=1, bias=False),
+                #nn.InstanceNorm2d(cur_in_channel*2, affine=True),
+                nn.LeakyReLU(0.01))
             self._layer_list.append(layer)
             last_in_channel = cur_in_channel*2
 
         self._final_layer = nn.Sequential(
-            nn.AdaptiveAvgPool2d((1, 1)), nn.Flatten(), nn.Linear(last_in_channel, 1, bias=True))
+            #nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(), nn.Linear(last_in_channel, 1, bias=False))
 
     def forward(self, z: List[Tensor]) -> Tensor:
         input: Tensor = None
@@ -427,7 +438,7 @@ class PyramidDiscriminator(nn.Module):
             input = torch.cat([input, z_one], dim=1) if input is not None else z_one
             input = layer(input)
         input = self._final_layer(input)
-        return input
+        return input.squeeze(-1)
 
 
 class CSGlowMnistModel(CSGlowModel):
@@ -438,12 +449,12 @@ class CSGlowMnistModel(CSGlowModel):
         #style_dim = 64
         #latent_dim = content_dim + style_dim
 
-        img_size = 28
+        img_size = 32
         in_channel = 3
         n_flow = 32
-        n_block = 2
+        n_block = 4
 
-        glow: Glow = Glow(img_size, in_channel, n_flow, n_block, affine=False, conv_lu=False)
+        glow: Glow = Glow(img_size, in_channel, n_flow, n_block, affine=True, conv_lu=True)
 
         style_w: nn.Module = BlockwiseWeight(img_size, in_channel, n_block)
         content_disc: nn.Module = PyramidDiscriminator(img_size, in_channel, n_block)
@@ -459,3 +470,12 @@ class CSGlowMnistModel(CSGlowModel):
         self._content_dim = content_dim
         self._style_dim = style_dim
 
+    def _latent_to_cs(self, z: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
+        s: List[Tensor] = self._style_w(z)
+        c: List[Tensor] = [z_one - s_one for s_one, z_one in zip(s, z)]
+        return c, s
+
+    def _cs_to_latent(self, c: List[Tensor], s: List[Tensor] = None) -> List[Tensor]:
+        if s is None:
+            return c
+        return [c_one + s_one for c_one, s_one in zip(c, s)]

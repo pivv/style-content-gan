@@ -18,8 +18,9 @@ class ListMSELoss(nn.modules.loss._Loss):
     def forward(self, input: List[Tensor], target: List[Tensor] = None) -> Tensor:
         if target is not None:
             input = [input_one - target_one for input_one, target_one in zip(input, target)]
-        output: Tensor = sum((input_one * input_one).flatten(start_dim=1).sum(dim=1) for input_one in input) / sum(
-            input_one.flatten(start_dim=1).size(1) for input_one in input)
+        #output: Tensor = sum((input_one * input_one).flatten(start_dim=1).sum(dim=1) for input_one in input) / sum(
+        #    input_one.flatten(start_dim=1).size(1) for input_one in input)
+        output: Tensor = sum((input_one * input_one).flatten(start_dim=1).mean(dim=1) for input_one in input) / float(len(input))
         if self.reduction is 'none':
             pass
         elif self.reduction is 'mean':

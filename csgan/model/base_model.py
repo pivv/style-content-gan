@@ -89,10 +89,13 @@ class BaseModel(nn.Module):
         val_loss_dict: dict = None
         for iepoch in range(1, num_epoch+1):
             for batch in train_data:
+                if istep % params['scheduler_interval'] == 0:
+                    self._update_schedulers(params, global_step=istep)
+
                 istep += 1
-                self._update_schedulers(params, global_step=istep)
                 batch: Dict[str, Tensor] = {key: value.to(self._device) for key, value in batch.items()}
                 loss_dict: Dict[str, Any] = self.train_on_batch(batch, params, global_step=istep)
+
                 for key in loss_dict:
                     writer.add_scalar(f'train/{key}', loss_dict[key], global_step=istep)
                 if istep % params['checkpoint_interval'] == 0:
