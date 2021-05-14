@@ -31,7 +31,7 @@ from csgan.deep.loss import ListMSELoss, SiameseLoss, L1SiameseLoss, BinaryEntro
 from csgan.deep.layer import View, Permute
 from csgan.deep.grad import grad_scale, grad_reverse
 from csgan.deep.resnet import simple_resnet, simple_bottleneck_resnet
-from csgan.deep.initialize import weights_init_resnet
+from csgan.deep.initialize import weights_init_xavier, weights_init_resnet
 from csgan.deep.norm import spectral_norm
 from csgan.deep.glow.model import Glow
 
@@ -318,7 +318,7 @@ class CSGlowModel(BaseModel):
 
         ## 3-1. Identity Loss
 
-        xp1_idt: Tensor = self._glow.reverse(c1)
+        xp1_idt: Tensor = self._glow.reverse(self._cs_to_latent(c1))
 
         loss_identity: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_identity > 0:
@@ -345,8 +345,8 @@ class CSGlowModel(BaseModel):
 
         loss_style_encoder: Tensor = torch.FloatTensor([0.])[0].to(self._device)
         if lambda_style > 0:
-            z12: List[Tensor] = self._cs_to_latent(c1, s2)
-            #z12: List[Tensor] = self._cs_to_latent(c1_detach, s2)
+            #z12: List[Tensor] = self._cs_to_latent(c1, s2)
+            z12: List[Tensor] = self._cs_to_latent(c1_detach, s2)
             b12_style: Tensor = self._style_disc(z12)
 
             loss_style_encoder = lambda_style * gamma_style * (
@@ -408,13 +408,15 @@ class BlockwiseWeight(nn.Module):
 
 
 class PyramidDiscriminator(nn.Module):
-    def __init__(self, img_size: int, in_channel: int, n_block: int):
+    def __init__(self, img_size: int, in_channel2: int, n_block: int):
         super().__init__()
         self._layer_list = nn.ModuleList()
-        cur_in_channel: int = in_channel
+        cur_in_channel: int = in_channel2
         last_in_channel: int = 0
         for iblock in range(n_block):
-            if iblock < n_block - 1:
+            if iblock == 0:
+                pass
+            elif iblock < n_block - 1:
                 cur_in_channel *= 2
             else:
                 cur_in_channel *= 4
@@ -458,12 +460,15 @@ class CSGlowMnistModel(CSGlowModel):
 
         style_w: nn.Module = BlockwiseWeight(img_size, in_channel, n_block)
         content_disc: nn.Module = PyramidDiscriminator(img_size, in_channel, n_block)
-        style_disc: nn.Module = PyramidDiscriminator(img_size, in_channel, n_block)
+        style_disc: nn.Module = PyramidDiscriminator(img_size, 2 * in_channel, n_block)
         scaler: Scaler = Scaler(1., 0.5)
 
-        style_w.apply(weights_init_resnet)
-        content_disc.apply(weights_init_resnet)
-        style_disc.apply(weights_init_resnet)
+        style_w.apply(weights_init_xavier)
+        content_disc.apply(weights_init_xavier)
+        style_disc.apply(weights_init_xavier)
+        #style_w.apply(weights_init_resnet)
+        #content_disc.apply(weights_init_resnet)
+        #style_disc.apply(weights_init_resnet)
 
         super().__init__(device, glow, style_w, content_disc, style_disc, scaler)
 
@@ -471,11 +476,16 @@ class CSGlowMnistModel(CSGlowModel):
         self._style_dim = style_dim
 
     def _latent_to_cs(self, z: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
-        s: List[Tensor] = self._style_w(z)
-        c: List[Tensor] = [z_one - s_one for s_one, z_one in zip(s, z)]
+        s: List[Tensor] = [z_one[:, :z_one.shape[1]//2, :, :] for z_one in z]
+        c: List[Tensor] = [z_one[:, z_one.shape[1]//2:, :, :] for z_one in z]
+        #s: List[Tensor] = self._style_w(z)
+        #c: List[Tensor] = [z_one - s_one for s_one, z_one in zip(s, z)]
         return c, s
 
     def _cs_to_latent(self, c: List[Tensor], s: List[Tensor] = None) -> List[Tensor]:
         if s is None:
-            return c
-        return [c_one + s_one for c_one, s_one in zip(c, s)]
+            s = [torch.zeros_like(c_one) for c_one in c]
+        return [torch.cat([s_one, c_one], dim=1) for c_one, s_one in zip(c, s)]
+        #if s is None:
+        #    return c
+        #return [c_one + s_one for c_one, s_one in zip(c, s)]
