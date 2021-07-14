@@ -503,3 +503,56 @@ class CSGlowMnistModel(CSGlowModel):
         if s is None:
             return c
         return [c_one + s_one for c_one, s_one in zip(c, s)]
+
+
+class CSGlowBeautyganModel(CSGlowModel):
+    def __init__(self, device, glow_path: str = '') -> None:
+        content_dim = 512
+        style_dim = content_dim
+        latent_dim = content_dim
+        #style_dim = 64
+        #latent_dim = content_dim + style_dim
+
+        img_size = 128
+        in_channel = 3
+        n_flow = 32
+        n_block = 5
+
+        glow: Glow = Glow(img_size, in_channel, n_flow, n_block, affine=True, conv_lu=True)
+        if glow_path:
+            glow.load_state_dict(torch.load(glow_path))
+
+        style_w: nn.Module = BlockwiseWeight(img_size, in_channel, n_block)
+        #content_disc: nn.Module = PyramidDiscriminator(img_size, 2 * in_channel, n_block, bias=-1)
+        content_disc: nn.Module = PyramidDiscriminator(img_size, 2 * in_channel, n_block, bias=0)
+        style_disc: nn.Module = PyramidDiscriminator(img_size, 2 * in_channel, n_block, bias=0)
+        scaler: Scaler = Scaler(1., 0.5)
+
+        #style_w.apply(weights_init_xavier)
+        content_disc.apply(weights_init_xavier)
+        style_disc.apply(weights_init_xavier)
+        #style_w.apply(weights_init_resnet)
+        #content_disc.apply(weights_init_resnet)
+        #style_disc.apply(weights_init_resnet)
+
+        super().__init__(device, glow, style_w, content_disc, style_disc, scaler)
+
+        self._content_dim = content_dim
+        self._style_dim = style_dim
+
+    def _latent_to_cs(self, z: List[Tensor]) -> Tuple[List[Tensor], List[Tensor]]:
+        #s: List[Tensor] = [z_one[:, :1, :, :] for z_one in z]
+        #c: List[Tensor] = [z_one[:, 1:, :, :] for z_one in z]
+        s: List[Tensor] = self._style_w(z)
+        c: List[Tensor] = [z_one - s_one for s_one, z_one in zip(s, z)]
+        #c: List[Tensor] = self._style_w(z)
+        #s: List[Tensor] = [z_one - c_one for c_one, z_one in zip(c, z)]
+        return c, s
+
+    def _cs_to_latent(self, c: List[Tensor], s: List[Tensor] = None) -> List[Tensor]:
+        #if s is None:
+        #    s = [torch.zeros_like(c_one[:, :1, :, :]) for c_one in c]
+        #return [torch.cat([s_one, c_one], dim=1) for c_one, s_one in zip(c, s)]
+        if s is None:
+            return c
+        return [c_one + s_one for c_one, s_one in zip(c, s)]
