@@ -421,6 +421,7 @@ class PyramidDiscriminator(nn.Module):
         self._layer_list = nn.ModuleList()
         cur_in_channel: int = in_channel2
         last_in_channel: int = 0
+        img_size /= 2
         for iblock in range(n_block):
             if iblock == 0:
                 pass
@@ -428,6 +429,7 @@ class PyramidDiscriminator(nn.Module):
                 cur_in_channel *= 2
             else:
                 cur_in_channel *= 4
+            img_size /= 2
             layer = nn.Sequential(
                 #nn.Conv2d(last_in_channel + cur_in_channel+bias, cur_in_channel*2, kernel_size=3, stride=1, padding=1, bias=False),
                 nn.Conv2d(last_in_channel + cur_in_channel+bias, cur_in_channel*2, kernel_size=3, stride=1, padding=1, bias=True),
@@ -441,15 +443,13 @@ class PyramidDiscriminator(nn.Module):
 
         self._final_layer = nn.Sequential(
             #nn.AdaptiveAvgPool2d((1, 1)),
-            nn.Flatten(), nn.Linear(last_in_channel, 1, bias=False))
-        print("Last_IN_CHANNEL: ", last_in_channel)
+            nn.Flatten(), nn.Linear(last_in_channel * img_size * img_size, 1, bias=False))
 
     def forward(self, z: List[Tensor]) -> Tensor:
         input: Tensor = None
         for layer, z_one in zip(self._layer_list, z):
             input = torch.cat([input, z_one], dim=1) if input is not None else z_one
             input = layer(input)
-        print("INPUT_SIZE: ", input.size())
         input = self._final_layer(input)
         return input.squeeze(-1)
 
