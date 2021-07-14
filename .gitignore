@@ -12,7 +12,7 @@
 
 # Run/Result directory
 /runs/*
-/models/*
+/pre_models/*
 /results/*
 
 # Temporary directory, files
