@@ -460,7 +460,7 @@ class CSGlowMnistModel(CSGlowModel):
         #style_dim = 64
         #latent_dim = content_dim + style_dim
 
-        img_size = 128
+        img_size = 32
         in_channel = 3
         n_flow = 32
         n_block = 4
