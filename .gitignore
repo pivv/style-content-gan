@@ -11,8 +11,9 @@
 **/~$*.xls*
 
 # Run/Result directory
-**/runs/*
-**/results/*
+/runs/*
+/models/*
+/results/*
 
 # Temporary directory, files
 **/temp/*

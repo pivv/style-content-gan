@@ -36,6 +36,10 @@ from csgan.deep.norm import spectral_norm
 from csgan.deep.glow.model import Glow
 
 
+def flatten_latent_vector(z: List[Tensor]):
+    return torch.cat([(z_one ** 2).flatten(start_dim=1) for z_one in z], dim=1)
+
+
 class CSGlowModel(BaseModel):
     def __init__(self, device,
                  glow: Glow, style_w: nn.Module, content_disc: nn.Module, style_disc: nn.Module,
@@ -134,10 +138,12 @@ class CSGlowModel(BaseModel):
             x2_cycle: Tensor = torch.clip(self._scaler.unscaling(xp2_cycle), 0., 1.)
             xp_sample: Tensor = self._glow.sample(len(batch['x1']), device=batch['x1'].device)
             x_sample: Tensor = torch.clip(self._scaler.unscaling(xp_sample), 0., 1.)
-            output: Dict[str, Tensor or List[Tensor]] = {'z1': z1, 'z2': z2, 's1': s1, 's2': s2, 'c1': c1, 'c2': c2,
-                                                         'x1_idt': x1_idt, 'x2_idt': x2_idt, 'x12': x12, 'x21': x21,
-                                                         'x1_cycle': x1_cycle, 'x2_cycle': x2_cycle,
-                                                         'x_sample': x_sample}
+            output: Dict[str, Tensor] = {'z1': flatten_latent_vector(z1), 'z2': flatten_latent_vector(z2),
+                                         's1': flatten_latent_vector(s1), 's2': flatten_latent_vector(s2),
+                                         'c1': flatten_latent_vector(c1), 'c2': flatten_latent_vector(c2),
+                                         'x1_idt': x1_idt, 'x2_idt': x2_idt, 'x12': x12, 'x21': x21,
+                                         'x1_cycle': x1_cycle, 'x2_cycle': x2_cycle,
+                                         'x_sample': x_sample}
         return output
 
     def _post_processing(self, batch: Dict[str, Tensor], params: Dict[str, Any],

@@ -18,8 +18,9 @@ class ListMSELoss(nn.modules.loss._Loss):
     def forward(self, input: List[Tensor], target: List[Tensor] = None) -> Tensor:
         if target is not None:
             input = [input_one - target_one for input_one, target_one in zip(input, target)]
-        output: Tensor = sum((input_one ** 2).flatten(start_dim=1).sum(dim=1) for input_one in input) / sum(
-            input_one.flatten(start_dim=1).size(1) for input_one in input)
+        output: Tensor = torch.cat([(input_one ** 2).flatten(start_dim=1) for input_one in input], dim=1).mean(dim=1)
+        #output: Tensor = sum((input_one ** 2).flatten(start_dim=1).sum(dim=1) for input_one in input) / sum(
+        #    input_one.flatten(start_dim=1).size(1) for input_one in input)
         #output: Tensor = sum((input_one * input_one).flatten(start_dim=1).mean(dim=1) for input_one in input) / float(len(input))
         if self.reduction is 'none':
             pass
@@ -41,9 +42,12 @@ class ListSiameseLoss(nn.modules.loss._Loss):
         if target is not None:
             input = [input_one - target_one for input_one, target_one in zip(input, target)]
         output: Tensor = torch.clamp(margin - torch.sqrt(
-            sum((input_one ** 2).flatten(start_dim=1).sum(dim=1) for input_one in input) / sum(
-            input_one.flatten(start_dim=1).size(1) for input_one in input)
+            torch.cat([(input_one ** 2).flatten(start_dim=1) for input_one in input], dim=1).mean(dim=1)
         ), min=0.) ** 2
+        #output: Tensor = torch.clamp(margin - torch.sqrt(
+        #    sum((input_one ** 2).flatten(start_dim=1).sum(dim=1) for input_one in input) / sum(
+        #    input_one.flatten(start_dim=1).size(1) for input_one in input)
+        #), min=0.) ** 2
         if self.reduction is 'none':
             pass
         elif self.reduction is 'mean':
