@@ -442,12 +442,14 @@ class PyramidDiscriminator(nn.Module):
         self._final_layer = nn.Sequential(
             #nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(), nn.Linear(last_in_channel, 1, bias=False))
+        print("Last_IN_CHANNEL: ", last_in_channel)
 
     def forward(self, z: List[Tensor]) -> Tensor:
         input: Tensor = None
         for layer, z_one in zip(self._layer_list, z):
             input = torch.cat([input, z_one], dim=1) if input is not None else z_one
             input = layer(input)
+        print("INPUT_SIZE: ", input.size())
         input = self._final_layer(input)
         return input.squeeze(-1)
 
