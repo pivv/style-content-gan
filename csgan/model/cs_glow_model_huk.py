@@ -441,6 +441,7 @@ class PyramidDiscriminator(nn.Module):
             self._layer_list.append(layer)
             last_in_channel = cur_in_channel*2
 
+        print(img_size)
         self._final_layer = nn.Sequential(
             #nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(), nn.Linear(last_in_channel * img_size * img_size, 1, bias=False))
