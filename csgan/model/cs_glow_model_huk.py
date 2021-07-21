@@ -467,7 +467,7 @@ class CSGlowMnistModel(CSGlowModel):
         n_flow = 32
         n_block = 4
 
-        glow: Glow = Glow(img_size, in_channel, n_flow, n_block, affine=True, conv_lu=True)
+        glow: Glow = Glow(img_size, in_channel, n_flow, n_block, affine=True, conv_lu=False)
         if glow_path:
             glow.load_state_dict(torch.load(glow_path))
 
